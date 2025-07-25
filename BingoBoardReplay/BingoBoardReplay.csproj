@@ -13,8 +13,8 @@
 		<Product>BingoBoardReplay</Product>
 		<Description>A Hollow Knight Mod</Description>
 		<Copyright>Copyright ©  2025</Copyright>
-		<AssemblyVersion>1.0.0.0</AssemblyVersion>
-		<FileVersion>1.0.0.0</FileVersion>
+		<AssemblyVersion>1.1.0.0</AssemblyVersion>
+		<FileVersion>1.1.0.0</FileVersion>
 		<OutputPath>bin\$(Configuration)\</OutputPath>
 		<LangVersion>latest</LangVersion>
 	</PropertyGroup>
@@ -57,7 +57,10 @@
 			<HintPath>$(HollowKnightRefs)/Assembly-CSharp-firstpass.dll</HintPath>
 		</Reference>
 		<Reference Include="BingoSync">
-		  <HintPath>..\..\..\GOG Games\Hollow Knight\Hollow Knight_Data\Managed\Mods\BingoSync\BingoSync.dll</HintPath>
+		  <HintPath>$(HollowKnightRefs)\Mods\BingoSync\BingoSync.dll</HintPath>
+		</Reference>
+		<Reference Include="MagicUI">
+		  <HintPath>$(HollowKnightRefs)\Mods\MagicUI\MagicUI.dll</HintPath>
 		</Reference>
 		<Reference Include="GalaxyCSharp">
 			<HintPath>$(HollowKnightRefs)/GalaxyCSharp.dll</HintPath>

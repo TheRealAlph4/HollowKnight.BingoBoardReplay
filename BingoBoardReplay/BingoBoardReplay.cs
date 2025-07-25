@@ -1,106 +1,139 @@
 ﻿using BingoSync.Clients.EventInfoObjects;
 using BingoSync.Sessions;
-using BingoSync.Settings;
 using Modding;
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace BingoBoardReplay
 {
-    public class GlobalSettings
-    {
-        public string SourceRoom = "-";
-        public string SourcePassword = "-";
-        public string DestinationRoom = "-";
-        public string DestinationPassword = "-";
-        public int ReplayDelaySeconds = 5;
-    }
-
     public class BingoBoardReplay : Mod, IGlobalSettings<GlobalSettings>
     {
         new public string GetName() => "BingoBoardReplay";
 
-        public static string version = "1.0.0.0";
+        public static string version = "1.1.0.0";
         public override string GetVersion() => version;
 
         public override int LoadPriority() => 10;
 
-        private GlobalSettings settings = new();
+        public static BingoBoardReplay Instance;
+        public GlobalSettings Settings = new();
         private Session listener;
         private Session replayer;
 
+        private EventHandler<GoalUpdateEventInfo> currentReplayer;
+
+        private int _goalsInProgress = 0;
+        public int GoalsInProgress
+        {
+            get
+            {
+                return _goalsInProgress;
+            }
+            set
+            {
+                _goalsInProgress = value;
+                ReplayUI.MarksInQueue = _goalsInProgress;
+            }
+        }
+
+        private Guid CurrentReplayId { get; set; } = Guid.NewGuid();
+
         public override void Initialize()
         {
+            Instance = this;
             Log("Initializing");
-            ModHooks.FinishedLoadingModsHook += ConnectToRooms;
+            ReplayUI.SetLog(Log);
+
+            listener = BingoSync.Interfaces.SessionManager.CreateSession("SourceListener", BingoSync.Clients.Servers.BingoSync, false);
+            replayer = BingoSync.Interfaces.SessionManager.CreateSession("TargetReplayer", BingoSync.Clients.Servers.BingoSync, true);
+
+            listener.OnNewCardReceived += RevealNewCard;
+            replayer.OnNewCardReceived += RevealNewCard;
+            listener.OnRoomSettingsReceived += (sender, settings) => ReplayUI.SourceRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
+            replayer.OnRoomSettingsReceived += (sender, settings) => ReplayUI.DestinationRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
         }
 
         public void OnLoadGlobal(GlobalSettings s)
         {
-            settings = s;
-            settings.SourceRoom = settings.SourceRoom.Split('/').Last();
-            settings.DestinationRoom = settings.DestinationRoom.Split('/').Last();
+            Settings = s;
         }
 
         public GlobalSettings OnSaveGlobal()
         {
-            return settings;
+            return Settings;
         }
 
-        private void ConnectToRooms()
+        public void StartReplay()
         {
             Task.Run(() =>
             {
-                listener = BingoSync.Interfaces.SessionManager.CreateSession("SourceListener", BingoSync.Clients.Servers.BingoSync, false);
-                listener.JoinRoom(settings.SourceRoom, "ReplayBot", settings.SourcePassword, (ex) => { });
+                CurrentReplayId = Guid.NewGuid();
 
-                Thread.Sleep(2000);
+                listener.JoinRoom(ReplayUI.SourceRoomCode, "ReplayBot", ReplayUI.SourceRoomPassword, (ex) => { });
+                while(listener.ClientIsConnecting())
+                {
+                    Thread.Sleep(1000);
+                }
 
-                replayer = BingoSync.Interfaces.SessionManager.CreateSession("TargetReplayer", BingoSync.Clients.Servers.BingoSync, true);
-                replayer.JoinRoom(settings.DestinationRoom, "ReplayBot", settings.DestinationPassword, (ex) => { });
-
-                Thread.Sleep(5000);
+                replayer.JoinRoom(ReplayUI.DestinationRoomCode, "ReplayBot", ReplayUI.DestinationRoomPassword, (ex) => { });
+                while(replayer.ClientIsConnecting())
+                {
+                    Thread.Sleep(1000);
+                }
 
                 listener.RevealCard();
                 replayer.RevealCard();
 
-                replayer.SendChatMessage($"Replaying marks from room {settings.SourceRoom} with {settings.ReplayDelaySeconds} seconds delay.");
-
-                listener.OnGoalUpdateReceived += MakeDelayedMarkReplayer(settings.ReplayDelaySeconds, replayer);
-
-                listener.OnNewCardReceived += OnNewCardReceived;
-                replayer.OnNewCardReceived += OnNewCardReceived;
+                currentReplayer = MakeDelayedMarkReplayer(ReplayUI.MainDelay, replayer, CurrentReplayId);
+                listener.OnGoalUpdateReceived += currentReplayer;
             });
         }
 
-        private void OnNewCardReceived(object sender, NewCardEventInfo e)
+        public void StopReplay()
+        {
+            listener.ExitRoom(() => { });
+            replayer.ExitRoom(() => { });
+            GoalsInProgress = 0;
+            listener.OnGoalUpdateReceived -= currentReplayer;
+            CurrentReplayId = Guid.NewGuid();
+        }
+
+        private void RevealNewCard(object sender, NewCardEventInfo info)
         {
             Session session = sender as Session;
             Task.Run(() =>
             {
-                Thread.Sleep(2000);
+                Thread.Sleep(1000);
                 session.RevealCard();
             });
         }
 
-        private EventHandler<GoalUpdateEventInfo> MakeDelayedMarkReplayer(int delaySeconds, Session replayer)
+        private EventHandler<GoalUpdateEventInfo> MakeDelayedMarkReplayer(int delaySeconds, Session replayer, Guid markReplayId)
         {
-            return (object sender, GoalUpdateEventInfo goalUpdate) =>
+            return (sender, goalUpdate) =>
             {
                 if (goalUpdate.Unmarking || !replayer.Board.GetSlot(goalUpdate.Slot).MarkedBy.Contains(BingoSync.Colors.Blank))
                 {
                     return;
                 }
-                Task remark = new(() =>
+
+                ++GoalsInProgress;
+                
+                Task.Run(() =>
                 {
                     Thread.Sleep(delaySeconds * 1000);
-                    replayer.SelectSquare(goalUpdate.Slot + 1, goalUpdate.Color, () => {
-                        Log($"There was some error trying to mark slot {goalUpdate.Slot + 1}.");
+
+                    Task.Run(() =>
+                    {
+                        Thread.Sleep(ReplayUI.SecondaryDelay * 1000);
+                        if (markReplayId == CurrentReplayId)
+                        {
+                            --GoalsInProgress;
+                            replayer.SelectSquare(goalUpdate.Slot + 1, goalUpdate.Color, () => Log($"Could not mark slot {goalUpdate.Slot + 1}."));
+                        }
                     });
                 });
-                remark.Start();
             };
         }
     }
