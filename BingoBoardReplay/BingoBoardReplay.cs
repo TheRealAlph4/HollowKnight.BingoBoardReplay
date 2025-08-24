@@ -1,4 +1,5 @@
 ﻿using BingoSync.Clients.EventInfoObjects;
+using BingoSync.Interfaces;
 using BingoSync.Sessions;
 using Modding;
 using System;
@@ -11,10 +12,8 @@ namespace BingoBoardReplay
     {
         new public string GetName() => "BingoBoardReplay";
 
-        public static string version = "1.1.0.0";
+        public static string version = "1.2.0.0";
         public override string GetVersion() => version;
-
-        public override int LoadPriority() => 10;
 
         public static BingoBoardReplay Instance;
         public GlobalSettings Settings = new();
@@ -45,13 +44,16 @@ namespace BingoBoardReplay
             Log("Initializing");
             ReplayUI.SetLog(Log);
 
-            listener = BingoSync.Interfaces.SessionManager.CreateSession("SourceListener", BingoSync.Clients.Servers.BingoSync, false);
-            replayer = BingoSync.Interfaces.SessionManager.CreateSession("TargetReplayer", BingoSync.Clients.Servers.BingoSync, true);
+            OrderedLoader.OnCompletelyLoaded += delegate
+            {
+                listener = SessionManager.CreateSession("SourceListener", BingoSync.Clients.Servers.BingoSync, false);
+                replayer = SessionManager.CreateSession("TargetReplayer", BingoSync.Clients.Servers.BingoSync, true);
 
-            listener.OnNewCardReceived += RevealNewCard;
-            replayer.OnNewCardReceived += RevealNewCard;
-            listener.OnRoomSettingsReceived += (sender, settings) => ReplayUI.SourceRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
-            replayer.OnRoomSettingsReceived += (sender, settings) => ReplayUI.DestinationRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
+                listener.OnNewCardReceived += RevealNewCard;
+                replayer.OnNewCardReceived += RevealNewCard;
+                listener.OnRoomSettingsReceived += (sender, settings) => ReplayUI.SourceRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
+                replayer.OnRoomSettingsReceived += (sender, settings) => ReplayUI.DestinationRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
+            };
         }
 
         public void OnLoadGlobal(GlobalSettings s)
@@ -113,7 +115,7 @@ namespace BingoBoardReplay
         {
             return (sender, goalUpdate) =>
             {
-                if (goalUpdate.Unmarking || !replayer.Board.GetSlot(goalUpdate.Slot).MarkedBy.Contains(BingoSync.Colors.Blank))
+                if (goalUpdate.Unmarking || !replayer.Board.GetIndex(goalUpdate.Index).MarkedBy.Contains(BingoSync.Colors.Blank))
                 {
                     return;
                 }
@@ -130,7 +132,7 @@ namespace BingoBoardReplay
                         if (markReplayId == CurrentReplayId)
                         {
                             --GoalsInProgress;
-                            replayer.SelectSquare(goalUpdate.Slot + 1, goalUpdate.Color, () => Log($"Could not mark slot {goalUpdate.Slot + 1}."));
+                            replayer.SelectSlot(goalUpdate.Index + 1, goalUpdate.Color, () => Log($"Could not mark slot {goalUpdate.Index + 1}."));
                         }
                     });
                 });
