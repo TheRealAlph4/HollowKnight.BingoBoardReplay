@@ -28,6 +28,7 @@ namespace BingoBoardReplay
         {
             if (menu == _ReplayMenuScreen)
             {
+                BingoSync.BingoSync.HideMenu();
                 BingoBoardReplay.Instance.SetUIVisible(true);
             }
             yield return orig(self, menu);

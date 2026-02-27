@@ -14,7 +14,7 @@ namespace BingoBoardReplay
     {
         new public string GetName() => "BingoBoardReplay";
 
-        public static string version = "1.3.0.0";
+        public static string version = "1.3.1.0";
         public override string GetVersion() => version;
 
         public static BingoBoardReplay Instance;
@@ -51,7 +51,7 @@ namespace BingoBoardReplay
             OrderedLoader.OnCompletelyLoaded += delegate
             {
                 listener = SessionManager.CreateSession("SourceListener", BingoSync.Clients.Servers.BingoSync, false);
-                replayer = SessionManager.CreateSession("TargetReplayer", BingoSync.Clients.Servers.BingoSync, true);
+                replayer = SessionManager.CreateSession("TargetReplayer", BingoSync.Clients.Servers.BingoSync, false);
 
                 listener.OnNewCardReceived += RevealNewCard;
                 replayer.OnNewCardReceived += RevealNewCard;
@@ -176,14 +176,7 @@ namespace BingoBoardReplay
         {
             return (sender, goalUpdate) =>
             {
-                if (goalUpdate.Unmarking)// || !replayer.Board.GetIndex(goalUpdate.Index).MarkedBy.Contains(BingoSync.Colors.Blank))
-                {
-                    return;
-                }
-
-
                 ++GoalsInProgress;
-                
                 Task.Run(() =>
                 {
                     Thread.Sleep(delaySeconds * 1000);
@@ -194,7 +187,7 @@ namespace BingoBoardReplay
                         if (markReplayId == CurrentReplayId)
                         {
                             --GoalsInProgress;
-                            replayer.SelectIndex(goalUpdate.Index, goalUpdate.Color, () => Log($"Could not mark slot {goalUpdate.Index + 1}."));
+                            replayer.SelectIndex(goalUpdate.Index, goalUpdate.Color, () => Log($"Could not mark slot {goalUpdate.Index + 1}."), goalUpdate.Unmarking);
                         }
                     });
                 });
