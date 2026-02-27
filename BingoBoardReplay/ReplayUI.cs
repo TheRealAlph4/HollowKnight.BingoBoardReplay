@@ -8,15 +8,21 @@ namespace BingoBoardReplay
 {
     static class ReplayUI
     {
-        private readonly static int NARROW_WIDTH = 180;
-        private readonly static int WIDE_WIDTH = 622;
-        private readonly static int NORMAL_FONT_SIZE = 22; 
+        private readonly static int WIDE_WIDTH = 600;
+        private readonly static int MIDDLE_WIDTH = 200;
+
+        private readonly static int NORMAL_FONT_SIZE = 22;
         private readonly static int BIG_FONT_SIZE = 32;
+
         private readonly static Padding TITLE_PADDING = new(0, 25, 0, 5);
+        private readonly static Padding GENERAL_PADDING = new(5);
 
         private readonly static LayoutRoot layoutRoot;
         private readonly static StackLayout mainStack;
-        private readonly static StackLayout secondaryStack;
+        private readonly static StackLayout sourceRoomStack;
+        private readonly static StackLayout middleStack;
+        private readonly static StackLayout destinationRoomStack;
+        private readonly static StackLayout secondaryDelayStack;
 
         private readonly static TextObject sourceRoomText;
         private readonly static TextInput sourceLink;
@@ -30,6 +36,8 @@ namespace BingoBoardReplay
         private readonly static TextInput mainDelay;
 
         private readonly static Button replayButton;
+        private readonly static TextInput goalsInProgressText;
+        private readonly static Button reproduceButton;
         
         private readonly static TextObject secondaryDelayText;
         private readonly static TextInput secondaryDelay;
@@ -37,6 +45,8 @@ namespace BingoBoardReplay
         private readonly static Button increaseSecondaryDelay;
 
         private static Action<string> Log;
+
+        public static bool IsVisible { get; set; } = false;
 
         private static bool _isReplaying = false;
         private static bool IsReplaying
@@ -48,17 +58,38 @@ namespace BingoBoardReplay
             set
             {
                 _isReplaying = value;
-                if (value)
+                if (_isReplaying)
                 {
                     BingoBoardReplay.Instance.StartReplay();
+                    replayButton.Enabled = false;
                 }
                 else
                 {
                     SourceRoomTextSuffix = "";
                     DestinationRoomTextSuffix = "";
                     BingoBoardReplay.Instance.StopReplay();
+                    reproduceButton.Enabled = false;
                 }
                 SetUIReplaying(value);
+            }
+        }
+
+        public static bool BothClientsConnected
+        {
+            set
+            {
+                if(value)
+                {
+                    replayButton.Enabled = true;
+                }
+            }
+        }
+
+        public static bool ListenerHasRevealed
+        {
+            set
+            {
+                reproduceButton.Enabled = value;
             }
         }
 
@@ -66,7 +97,7 @@ namespace BingoBoardReplay
         {
             set
             {
-                replayButton.Content = IsReplaying ? "Stop Replay (" + value.ToString() + " marks in queue)" : "Start Replay";
+                goalsInProgressText.Text = IsReplaying ? $"In Queue: {value}" : "No Replay";
             }
         }
 
@@ -120,7 +151,7 @@ namespace BingoBoardReplay
         {
             set
             {
-                sourceRoomText.Text = "Source Room" + value;
+                sourceRoomText.Text = "Player Room" + value;
             }
         }
 
@@ -128,37 +159,62 @@ namespace BingoBoardReplay
         {
             set
             {
-                destinationRoomText.Text = "Destination Room" + value;
+                destinationRoomText.Text = "Replay Room" + value;
             }
         }
 
-        public static void SetLog(Action<string> log)
+        public static void SetLogger(Action<string> log)
         {
             Log = log;
         }
 
         static ReplayUI()
         {
-            layoutRoot = new LayoutRoot(true, "BingoBoardReplay LayoutRoot");
+            layoutRoot = new LayoutRoot(true, "BingoBoardReplay LayoutRoot")
+            {
+                VisibilityCondition = () => IsVisible
+            };
             mainStack = new StackLayout(layoutRoot, "BingoBoardReplay MainStack")
             {
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Bottom,
-                Orientation = Orientation.Vertical,
-                Padding = new Padding(50),
-                Spacing = 10,
-            };
-            secondaryStack = new StackLayout(layoutRoot, "BingoBoardReplay SecondaryStack")
-            {
-                HorizontalAlignment = HorizontalAlignment.Left,
+                HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 Orientation = Orientation.Horizontal,
-                Spacing = 10,
+                Padding = GENERAL_PADDING,
+            };
+
+            sourceRoomStack = new StackLayout(layoutRoot, "BingoBoardReplay SourceRoomStack")
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Orientation = Orientation.Vertical,
+                Padding = GENERAL_PADDING,
+            };
+            middleStack = new StackLayout(layoutRoot, "BingoBoardReplay MiddleStack")
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Orientation = Orientation.Vertical,
+                Padding = GENERAL_PADDING,
+            };
+            destinationRoomStack = new StackLayout(layoutRoot, "BingoBoardReplay DestinationRoomStack")
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Orientation = Orientation.Vertical,
+                Padding = GENERAL_PADDING,
+            };
+
+            secondaryDelayStack = new StackLayout(layoutRoot, "BingoBoardReplay SecondaryDelayStack")
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Orientation = Orientation.Horizontal,
+                Padding = GENERAL_PADDING,
             };
 
             sourceRoomText = new TextObject(layoutRoot, "BingoBoardReplay SourceRoomText")
             {
-                Text = "Source Room",
+                Text = "Player Room",
                 FontSize = BIG_FONT_SIZE,
                 Padding = TITLE_PADDING,
             };
@@ -167,6 +223,7 @@ namespace BingoBoardReplay
                 Placeholder = "Room Link",
                 MinWidth = WIDE_WIDTH,
                 FontSize = NORMAL_FONT_SIZE,
+                Padding = GENERAL_PADDING,
             };
             sourcePassword = new TextInput(layoutRoot, "BingoBoardReplay SourcePassword")
             {
@@ -174,11 +231,12 @@ namespace BingoBoardReplay
                 MinWidth = WIDE_WIDTH,
                 FontSize = NORMAL_FONT_SIZE,
                 ContentType = ContentType.Password,
+                Padding = GENERAL_PADDING,
             };
 
             destinationRoomText = new TextObject(layoutRoot, "BingoBoardReplay DestinationRoomText")
             {
-                Text = "Destination Room",
+                Text = "Replay Room",
                 FontSize = BIG_FONT_SIZE,
                 Padding = TITLE_PADDING,
             };
@@ -187,6 +245,7 @@ namespace BingoBoardReplay
                 Placeholder = "Room Link",
                 MinWidth = WIDE_WIDTH,
                 FontSize = NORMAL_FONT_SIZE,
+                Padding = GENERAL_PADDING,
             };
             destinationPassword = new TextInput(layoutRoot, "BingoBoardReplay DestinationPassword")
             {
@@ -194,59 +253,87 @@ namespace BingoBoardReplay
                 MinWidth = WIDE_WIDTH,
                 FontSize = NORMAL_FONT_SIZE,
                 ContentType = ContentType.Password,
+                Padding = GENERAL_PADDING,
             };
 
             mainDelayText = new TextObject(layoutRoot, "BingoBoardReplay MainDelayText")
             {
-                Text = "Delay (seconds)",
+                Text = "Main Delay",
                 FontSize = BIG_FONT_SIZE,
                 Padding = TITLE_PADDING,
+                HorizontalAlignment = HorizontalAlignment.Center,
             };
             mainDelay = new TextInput(layoutRoot, "BingoBoardReplay MainDelay")
             {
-                Placeholder = "Delay (seconds)",
+                Placeholder = "Main Delay",
                 Text = BingoBoardReplay.Instance.Settings.DefaultMainDelaySeconds.ToString(),
-                MinWidth = WIDE_WIDTH,
+                MinWidth = MIDDLE_WIDTH,
                 FontSize = NORMAL_FONT_SIZE,
                 ContentType = ContentType.DecimalNumber,
+                Padding = GENERAL_PADDING,
+                HorizontalAlignment = HorizontalAlignment.Center,
             };
 
             replayButton = new Button(layoutRoot, "BingoBoardReplay ReplayButton")
             {
                 Content = "Start Replay",
-                MinWidth = WIDE_WIDTH,
+                MinWidth = MIDDLE_WIDTH,
                 MinHeight = 50,
                 FontSize = NORMAL_FONT_SIZE,
-                Padding = new Padding(0, 25, 0, 0)
+                Padding = GENERAL_PADDING,
+                HorizontalAlignment = HorizontalAlignment.Center,
+            };
+            goalsInProgressText = new TextInput(layoutRoot, "BingoBoardReplay GoalsInProgressText")
+            {
+                Placeholder = "Queue",
+                Text = "No Replay",
+                MinWidth = MIDDLE_WIDTH,
+                FontSize = NORMAL_FONT_SIZE,
+                Padding = GENERAL_PADDING,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Enabled = false,
+            };
+            reproduceButton = new Button(layoutRoot, "BingoBoardReplay ReproduceButton")
+            {
+                Content = "Clone Board",
+                MinWidth = MIDDLE_WIDTH,
+                MinHeight = 50,
+                FontSize = NORMAL_FONT_SIZE,
+                Enabled = false,
+                Padding = GENERAL_PADDING,
+                HorizontalAlignment = HorizontalAlignment.Center,
             };
 
             secondaryDelayText = new TextObject(layoutRoot, "BingoBoardReplay SecondaryDelayText")
             {
-                Text = "Seconday Delay",
-                FontSize = BIG_FONT_SIZE,
+                Text = "Secondary Delay",
+                FontSize = NORMAL_FONT_SIZE - 1,
                 Padding = TITLE_PADDING,
+                HorizontalAlignment = HorizontalAlignment.Center,
             };
             secondaryDelay = new TextInput(layoutRoot, "BingoBoardReplay SecondaryDelay")
             {
-                Placeholder = "Secondary Delay",
                 Text = BingoBoardReplay.Instance.Settings.DefaultSecondaryDelaySeconds.ToString(),
-                MinWidth = NARROW_WIDTH,
+                MinWidth = MIDDLE_WIDTH - 2 * 50,
                 FontSize = NORMAL_FONT_SIZE,
                 Enabled = false,
+                Padding = GENERAL_PADDING,
             };
             decreaseSecondaryDelay = new Button(layoutRoot, "BingoBoardReplay DecreaseSecondaryDelay")
             {
-                Content = "Decrease",
-                MinWidth = NARROW_WIDTH,
+                Content = "-",
+                MinWidth = 40,
                 MinHeight = 40,
                 FontSize = NORMAL_FONT_SIZE,
+                Padding = GENERAL_PADDING,
             };
             increaseSecondaryDelay = new Button(layoutRoot, "BingoBoardReplay IncreaseSecondaryDelay")
             {
-                Content = "Increase",
-                MinWidth = NARROW_WIDTH,
+                Content = "+",
+                MinWidth = 40,
                 MinHeight = 40,
                 FontSize = NORMAL_FONT_SIZE,
+                Padding = GENERAL_PADDING,
             };
 
             ArrangeUIElements();
@@ -256,31 +343,38 @@ namespace BingoBoardReplay
         private static void ArrangeUIElements()
         {
 
-            mainStack.Children.Add(sourceRoomText);
-            mainStack.Children.Add(sourceLink);
-            mainStack.Children.Add(sourcePassword);
+            sourceRoomStack.Children.Add(sourceRoomText);
+            sourceRoomStack.Children.Add(sourceLink);
+            sourceRoomStack.Children.Add(sourcePassword);
 
-            mainStack.Children.Add(destinationRoomText);
-            mainStack.Children.Add(destinationLink);
-            mainStack.Children.Add(destinationPassword);
+            destinationRoomStack.Children.Add(destinationRoomText);
+            destinationRoomStack.Children.Add(destinationLink);
+            destinationRoomStack.Children.Add(destinationPassword);
 
-            mainStack.Children.Add(mainDelayText);
-            mainStack.Children.Add(mainDelay);
+            middleStack.Children.Add(mainDelayText);
+            middleStack.Children.Add(mainDelay);
 
-            mainStack.Children.Add(secondaryDelayText);
-            secondaryStack.Children.Add(decreaseSecondaryDelay);
-            secondaryStack.Children.Add(secondaryDelay);
-            secondaryStack.Children.Add(increaseSecondaryDelay);
-            mainStack.Children.Add(secondaryStack);
+            middleStack.Children.Add(secondaryDelayText);
+            secondaryDelayStack.Children.Add(decreaseSecondaryDelay);
+            secondaryDelayStack.Children.Add(secondaryDelay);
+            secondaryDelayStack.Children.Add(increaseSecondaryDelay);
+            middleStack.Children.Add(secondaryDelayStack);
 
-            mainStack.Children.Add(replayButton);
+            middleStack.Children.Add(replayButton);
+            middleStack.Children.Add(goalsInProgressText);
+            middleStack.Children.Add(reproduceButton);
+
+            mainStack.Children.Add(sourceRoomStack);
+            mainStack.Children.Add(middleStack);
+            mainStack.Children.Add(destinationRoomStack);
         }
 
         private static void SetupOnClicks()
         {
             replayButton.Click += ReplayButtonOnClick;
-            increaseSecondaryDelay.Click += IncreaseSecondayDelayOnClick;
-            decreaseSecondaryDelay.Click += DecreaseSecondayDelayOnClick;
+            increaseSecondaryDelay.Click += IncreaseSecondaryDelayOnClick;
+            decreaseSecondaryDelay.Click += DecreaseSecondaryDelayOnClick;
+            reproduceButton.Click += ReproduceButtonOnClick; 
         }
 
         private static void ReplayButtonOnClick(Button _)
@@ -303,22 +397,28 @@ namespace BingoBoardReplay
             destinationLink.Enabled = !replaying;
             destinationPassword.Enabled = !replaying;
             mainDelay.Enabled = !replaying;
-            replayButton.Content = replaying ? "Stop Replay (0 marks in queue)" : "Start Replay";
+            MarksInQueue = 0;
+            replayButton.Content = replaying ? "Stop Replay" : "Start Replay";
         }
 
-        private static void IncreaseSecondayDelayOnClick(Button _)
+        private static void IncreaseSecondaryDelayOnClick(Button _)
         {
             secondaryDelay.Text = (SecondaryDelay + 1).ToString();
             decreaseSecondaryDelay.Enabled = true;
         }
 
-        private static void DecreaseSecondayDelayOnClick(Button _)
+        private static void DecreaseSecondaryDelayOnClick(Button _)
         {
             secondaryDelay.Text = (SecondaryDelay - 1).ToString();
             if(SecondaryDelay == 0)
             {
                 decreaseSecondaryDelay.Enabled = false;
             }
+        }
+
+        private static void ReproduceButtonOnClick(Button _)
+        {
+            BingoBoardReplay.Instance.ReproduceState();
         }
     }
 }
