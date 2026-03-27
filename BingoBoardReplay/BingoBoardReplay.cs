@@ -14,7 +14,7 @@ namespace BingoBoardReplay
     {
         new public string GetName() => "BingoBoardReplay";
 
-        public static string version = "1.3.2.0";
+        public static string version = "1.3.3.0";
         public override string GetVersion() => version;
 
         public static BingoBoardReplay Instance;
@@ -131,7 +131,23 @@ namespace BingoBoardReplay
                 }
 
                 waitingForReproduceBoard = true;
-                Replayer.NewCard(goals, false, false);
+
+                bool lockout = false;
+                switch(Settings.LockoutWhenCloning)
+                {
+                    case GlobalSettings.CloneRoomOption.Always: lockout = true; break;
+                    case GlobalSettings.CloneRoomOption.Never: lockout = false; break;
+                    case GlobalSettings.CloneRoomOption.Copy: lockout = Listener.RoomIsLockout; break;
+                }
+                bool hide = false;
+                switch (Settings.HideWhenCloning)
+                {
+                    case GlobalSettings.CloneRoomOption.Always: hide = true; break;
+                    case GlobalSettings.CloneRoomOption.Never: hide = false; break;
+                    case GlobalSettings.CloneRoomOption.Copy: hide = Listener.RoomHidCardInitially; break;
+                }
+
+                Replayer.NewCard(goals, lockout, hide);
                 while (waitingForReproduceBoard)
                 {
                     Thread.Sleep(250);

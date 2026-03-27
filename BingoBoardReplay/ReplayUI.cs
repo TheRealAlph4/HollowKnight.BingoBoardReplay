@@ -41,15 +41,15 @@ namespace BingoBoardReplay
         private readonly static TextObject mainDelayText;
         private readonly static TextInput mainDelay;
 
-        private readonly static Button replayButton;
-        private readonly static TextInput goalsInProgressText;
-        private readonly static Button reproduceButton;
-        
         private readonly static TextObject secondaryDelayText;
         private readonly static TextInput secondaryDelay;
         private readonly static Button decreaseSecondaryDelay;
         private readonly static Button increaseSecondaryDelay;
 
+        private readonly static Button replayButton;
+        private readonly static TextInput goalsInProgressText;
+        private readonly static Button reproduceButton;
+        
         private readonly static List<Button> destinationRoomColorButtons = [];
 
         private static Action<string> Log;
@@ -444,7 +444,7 @@ namespace BingoBoardReplay
 
         private static StackLayout CreateDestinationRoomColorSelector()
         {
-            StackLayout roomSelectorStack = new StackLayout(layoutRoot, "BingoBoardReplay DestinationRoomColorRow")
+            StackLayout roomSelectorStack = new(layoutRoot, "BingoBoardReplay DestinationRoomColorRow")
             {
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -452,14 +452,14 @@ namespace BingoBoardReplay
                 Orientation = Orientation.Vertical,
                 Padding = new Padding(0, 10, 0, 0),
             };
-            StackLayout row1 = new StackLayout(layoutRoot, "BingoBoardReplay DestinationRoomColorRow1")
+            StackLayout row1 = new(layoutRoot, "BingoBoardReplay DestinationRoomColorRow1")
             {
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 Spacing = 10,
                 Orientation = Orientation.Horizontal,
             };
-            StackLayout row2 = new StackLayout(layoutRoot, "BingoBoardReplay DestinationRoomColorRow2")
+            StackLayout row2 = new(layoutRoot, "BingoBoardReplay DestinationRoomColorRow2")
             {
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
