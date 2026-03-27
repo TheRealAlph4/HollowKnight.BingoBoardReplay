@@ -14,13 +14,13 @@ namespace BingoBoardReplay
     {
         new public string GetName() => "BingoBoardReplay";
 
-        public static string version = "1.3.1.0";
+        public static string version = "1.3.2.0";
         public override string GetVersion() => version;
 
         public static BingoBoardReplay Instance;
         public GlobalSettings Settings = new();
-        private Session listener;
-        private Session replayer;
+        internal Session Listener { get; set; }
+        internal Session Replayer { get; set; }
 
         private EventHandler<GoalUpdateEventInfo> currentReplayer;
 
@@ -50,15 +50,15 @@ namespace BingoBoardReplay
 
             OrderedLoader.OnCompletelyLoaded += delegate
             {
-                listener = SessionManager.CreateSession("SourceListener", BingoSync.Clients.Servers.BingoSync, false);
-                replayer = SessionManager.CreateSession("TargetReplayer", BingoSync.Clients.Servers.BingoSync, false);
+                Listener = SessionManager.CreateSession("SourceListener", BingoSync.Clients.Servers.BingoSync, false);
+                Replayer = SessionManager.CreateSession("TargetReplayer", BingoSync.Clients.Servers.BingoSync, false);
 
-                listener.OnNewCardReceived += RevealNewCard;
-                replayer.OnNewCardReceived += RevealNewCard;
-                replayer.OnNewCardReceived += ReceiveReproducedBoard;
-                listener.OnRoomSettingsReceived += (sender, settings) => ReplayUI.SourceRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
-                replayer.OnRoomSettingsReceived += (sender, settings) => ReplayUI.DestinationRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
-                listener.OnCardRevealedBroadcastReceived += OnListenerRevealed;
+                Listener.OnNewCardReceived += RevealNewCard;
+                Replayer.OnNewCardReceived += RevealNewCard;
+                Replayer.OnNewCardReceived += ReceiveReproducedBoard;
+                Listener.OnRoomSettingsReceived += (sender, settings) => ReplayUI.SourceRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
+                Replayer.OnRoomSettingsReceived += (sender, settings) => ReplayUI.DestinationRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
+                Listener.OnCardRevealedBroadcastReceived += OnListenerRevealed;
             };
         }
 
@@ -87,34 +87,35 @@ namespace BingoBoardReplay
             {
                 CurrentReplayId = Guid.NewGuid();
 
-                listener.JoinRoom(ReplayUI.SourceRoomCode, "ReplayBot", ReplayUI.SourceRoomPassword, (ex) => { });
-                while(listener.ClientIsConnecting())
+                Listener.JoinRoom(ReplayUI.SourceRoomCode, "ReplayBot", ReplayUI.SourceRoomPassword, (ex) => { });
+                while(Listener.ClientIsConnecting())
                 {
                     Thread.Sleep(250);
                 }
 
-                replayer.JoinRoom(ReplayUI.DestinationRoomCode, "ReplayBot", ReplayUI.DestinationRoomPassword, (ex) => { });
-                while(replayer.ClientIsConnecting())
+                Replayer.JoinRoom(ReplayUI.DestinationRoomCode, "ReplayBot", ReplayUI.DestinationRoomPassword, (ex) => { });
+                while(Replayer.ClientIsConnecting())
                 {
                     Thread.Sleep(250);
                 }
 
                 ReplayUI.BothClientsConnected = true;
 
-                listener.RevealCard();
-                replayer.RevealCard();
+                Listener.RevealCard();
+                Replayer.RevealCard();
 
-                currentReplayer = MakeDelayedMarkReplayer(ReplayUI.MainDelay, replayer, CurrentReplayId);
-                listener.OnGoalUpdateReceived += currentReplayer;
+                currentReplayer = MakeDelayedMarkReplayer(ReplayUI.MainDelay, Replayer, CurrentReplayId);
+                Listener.OnGoalUpdateReceived += currentReplayer;
             });
         }
 
         public void StopReplay()
         {
-            listener.ExitRoom(() => { });
-            replayer.ExitRoom(() => { });
+            Listener.ExitRoom(() => { });
+            Replayer.ExitRoom(() => { });
+            ReplayUI.BothClientsConnected = false;
             GoalsInProgress = 0;
-            listener.OnGoalUpdateReceived -= currentReplayer;
+            Listener.OnGoalUpdateReceived -= currentReplayer;
             CurrentReplayId = Guid.NewGuid();
         }
 
@@ -122,7 +123,7 @@ namespace BingoBoardReplay
         {
             Task.Run(() =>
             {
-                List<Square> backupSquares = listener.Board.SquaresToDisplay;
+                List<Square> backupSquares = Listener.Board.SquaresToDisplay;
                 List<BingoGoal> goals = [];
                 foreach (Square square in backupSquares)
                 {
@@ -130,7 +131,7 @@ namespace BingoBoardReplay
                 }
 
                 waitingForReproduceBoard = true;
-                replayer.NewCard(goals, false, false);
+                Replayer.NewCard(goals, false, false);
                 while (waitingForReproduceBoard)
                 {
                     Thread.Sleep(250);
@@ -143,7 +144,7 @@ namespace BingoBoardReplay
                     {
                         if(color != BingoSync.Colors.Blank)
                         {
-                            replayer.SelectIndex(i, color, () => {
+                            Replayer.SelectIndex(i, color, () => {
                                 Log("Couldn't mark a goal");
                             });
                         }
@@ -156,7 +157,7 @@ namespace BingoBoardReplay
         private void RevealNewCard(object sender, NewCardEventInfo info)
         {
             Session session = sender as Session;
-            if (session == listener)
+            if (session == Listener)
             {
                 ReplayUI.ListenerHasRevealed = false;
             }

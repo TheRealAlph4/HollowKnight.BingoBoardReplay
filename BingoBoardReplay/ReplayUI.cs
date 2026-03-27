@@ -1,18 +1,23 @@
-﻿using MagicUI.Core;
+﻿using BingoSync;
+using BingoSync.Sessions;
+using MagicUI.Core;
 using MagicUI.Elements;
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
 using ContentType = UnityEngine.UI.InputField.ContentType;
 
 namespace BingoBoardReplay
 {
     static class ReplayUI
     {
-        private readonly static int WIDE_WIDTH = 600;
-        private readonly static int MIDDLE_WIDTH = 200;
+        private const int WIDE_WIDTH = 600;
+        private const int MIDDLE_WIDTH = 200;
+        private const int COLOR_BUTTON_WIDTH = 100;
 
-        private readonly static int NORMAL_FONT_SIZE = 22;
-        private readonly static int BIG_FONT_SIZE = 32;
+        private const int NORMAL_FONT_SIZE = 22;
+        private const int BIG_FONT_SIZE = 32;
 
         private readonly static Padding TITLE_PADDING = new(0, 25, 0, 5);
         private readonly static Padding GENERAL_PADDING = new(5);
@@ -31,6 +36,7 @@ namespace BingoBoardReplay
         private readonly static TextObject destinationRoomText;
         private readonly static TextInput destinationLink;
         private readonly static TextInput destinationPassword;
+        private readonly static StackLayout destinationColorSelector;
 
         private readonly static TextObject mainDelayText;
         private readonly static TextInput mainDelay;
@@ -43,6 +49,8 @@ namespace BingoBoardReplay
         private readonly static TextInput secondaryDelay;
         private readonly static Button decreaseSecondaryDelay;
         private readonly static Button increaseSecondaryDelay;
+
+        private readonly static List<Button> destinationRoomColorButtons = [];
 
         private static Action<string> Log;
 
@@ -81,6 +89,17 @@ namespace BingoBoardReplay
                 if(value)
                 {
                     replayButton.Enabled = true;
+                    foreach (Button button in destinationRoomColorButtons)
+                    {
+                        button.Enabled = true;
+                    }
+                }
+                else
+                {
+                    foreach (Button button in destinationRoomColorButtons)
+                    {
+                        button.Enabled = false;
+                    }
                 }
             }
         }
@@ -255,6 +274,7 @@ namespace BingoBoardReplay
                 ContentType = ContentType.Password,
                 Padding = GENERAL_PADDING,
             };
+            destinationColorSelector = CreateDestinationRoomColorSelector();
 
             mainDelayText = new TextObject(layoutRoot, "BingoBoardReplay MainDelayText")
             {
@@ -350,6 +370,7 @@ namespace BingoBoardReplay
             destinationRoomStack.Children.Add(destinationRoomText);
             destinationRoomStack.Children.Add(destinationLink);
             destinationRoomStack.Children.Add(destinationPassword);
+            destinationRoomStack.Children.Add(destinationColorSelector);
 
             middleStack.Children.Add(mainDelayText);
             middleStack.Children.Add(mainDelay);
@@ -419,6 +440,85 @@ namespace BingoBoardReplay
         private static void ReproduceButtonOnClick(Button _)
         {
             BingoBoardReplay.Instance.ReproduceState();
+        }
+
+        private static StackLayout CreateDestinationRoomColorSelector()
+        {
+            StackLayout roomSelectorStack = new StackLayout(layoutRoot, "BingoBoardReplay DestinationRoomColorRow")
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Spacing = 10,
+                Orientation = Orientation.Vertical,
+                Padding = new Padding(0, 10, 0, 0),
+            };
+            StackLayout row1 = new StackLayout(layoutRoot, "BingoBoardReplay DestinationRoomColorRow1")
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Spacing = 10,
+                Orientation = Orientation.Horizontal,
+            };
+            StackLayout row2 = new StackLayout(layoutRoot, "BingoBoardReplay DestinationRoomColorRow2")
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Spacing = 10,
+                Orientation = Orientation.Horizontal,
+            };
+            foreach (Colors color in Enum.GetValues(typeof(Colors)))
+            {
+                string name = char.ToUpper(color.GetName()[0]) + color.GetName().Substring(1);
+                Action<Button> onClick = MakeColorButtonOnClick(destinationRoomColorButtons, color);
+                Button button = CreateColorButton(name, color.GetColor(), onClick);
+                destinationRoomColorButtons.Add(button);
+            }
+
+            row1.Children.Add(destinationRoomColorButtons[0]);
+            row1.Children.Add(destinationRoomColorButtons[1]);
+            row1.Children.Add(destinationRoomColorButtons[2]);
+            row1.Children.Add(destinationRoomColorButtons[3]);
+            row1.Children.Add(destinationRoomColorButtons[4]);
+
+            row2.Children.Add(destinationRoomColorButtons[5]);
+            row2.Children.Add(destinationRoomColorButtons[6]);
+            row2.Children.Add(destinationRoomColorButtons[7]);
+            row2.Children.Add(destinationRoomColorButtons[8]);
+            row2.Children.Add(destinationRoomColorButtons[9]);
+
+            roomSelectorStack.Children.Add(row1);
+            roomSelectorStack.Children.Add(row2);
+
+            return roomSelectorStack;
+        }
+
+        private static Button CreateColorButton(string text, Color color, Action<Button> onClick)
+        {
+            Button button = new(layoutRoot, text.ToLower())
+            {
+                Content = text,
+                FontSize = 15,
+                Margin = 20,
+                BorderColor = color,
+                ContentColor = color,
+                MinWidth = COLOR_BUTTON_WIDTH,
+                Enabled = false,
+            };
+            button.Click += onClick;
+            return button;
+        }
+
+        private static Action<Button> MakeColorButtonOnClick(List<Button> otherButtons, Colors color)
+        {
+            return button =>
+            {
+                foreach (Button otherButton in otherButtons)
+                {
+                    otherButton.BorderColor = otherButton.ContentColor;
+                }
+                button.BorderColor = Color.white;
+                BingoBoardReplay.Instance.Replayer.SetColor(color);
+            };
         }
     }
 }
