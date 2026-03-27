@@ -14,7 +14,7 @@ namespace BingoBoardReplay
     {
         new public string GetName() => "BingoBoardReplay";
 
-        public static string version = "1.3.3.0";
+        public static string version = "1.3.3.1";
         public override string GetVersion() => version;
 
         public static BingoBoardReplay Instance;
@@ -56,6 +56,7 @@ namespace BingoBoardReplay
                 Listener.OnNewCardReceived += RevealNewCard;
                 Replayer.OnNewCardReceived += RevealNewCard;
                 Replayer.OnNewCardReceived += ReceiveReproducedBoard;
+                Listener.OnRoomSettingsReceived += OnListenerRoomSettingsReceived;
                 Listener.OnRoomSettingsReceived += (sender, settings) => ReplayUI.SourceRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
                 Replayer.OnRoomSettingsReceived += (sender, settings) => ReplayUI.DestinationRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
                 Listener.OnCardRevealedBroadcastReceived += OnListenerRevealed;
@@ -66,6 +67,14 @@ namespace BingoBoardReplay
         {
             Session session = sender as Session;
             if(revealedEventInfo.Player.UUID == session.RoomPlayerUUID)
+            {
+                ReplayUI.ListenerHasRevealed = true;
+            }
+        }
+
+        private void OnListenerRoomSettingsReceived(object sender, RoomSettings roomSettings)
+        {
+            if(!roomSettings.HideCard)
             {
                 ReplayUI.ListenerHasRevealed = true;
             }
