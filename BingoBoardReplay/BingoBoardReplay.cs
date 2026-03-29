@@ -1,4 +1,5 @@
-﻿using BingoSync.Clients.EventInfoObjects;
+﻿using BingoSync;
+using BingoSync.Clients.EventInfoObjects;
 using BingoSync.CustomGoals;
 using BingoSync.Interfaces;
 using BingoSync.Sessions;
@@ -14,7 +15,7 @@ namespace BingoBoardReplay
     {
         new public string GetName() => "BingoBoardReplay";
 
-        public static string version = "1.3.3.2";
+        public static string version = "1.3.4.0";
         public override string GetVersion() => version;
 
         public static BingoBoardReplay Instance;
@@ -90,8 +91,9 @@ namespace BingoBoardReplay
             return Settings;
         }
 
-        public void StartReplay()
+        public void StartReplay(Action callback = null)
         {
+            ReplayUI.IsReplaying = true;
             Task.Run(() =>
             {
                 CurrentReplayId = Guid.NewGuid();
@@ -115,11 +117,14 @@ namespace BingoBoardReplay
 
                 currentReplayer = MakeDelayedMarkReplayer(ReplayUI.MainDelay, Replayer, CurrentReplayId);
                 Listener.OnGoalUpdateReceived += currentReplayer;
+
+                callback?.Invoke();
             });
         }
 
         public void StopReplay()
         {
+            ReplayUI.IsReplaying = false;
             Listener.ExitRoom(() => { });
             Replayer.ExitRoom(() => { });
             ReplayUI.BothClientsConnected = false;
@@ -220,6 +225,133 @@ namespace BingoBoardReplay
             };
         }
 
+        public void Reconnect()
+        {
+            static int findLastNewCardIndex(List<RoomEventInfo> infoList)
+            {
+                int lastNewCard = 0;
+                for (int i = 0; i < infoList.Count; ++i)
+                {
+                    if (infoList[i] is NewCardEventInfo)
+                    {
+                        lastNewCard = i;
+                    }
+                }
+                return lastNewCard;
+            }
+            static int parseStateUntilCutoff(List<RoomEventInfo> infoList, int lastNewCard, List<HashSet<Colors>> stateAtReplayCutoff)
+            {
+                DateTimeOffset cutoff = DateTimeOffset.UtcNow - TimeSpan.FromSeconds(ReplayUI.MainDelay + ReplayUI.SecondaryDelay);
+                for (int j = 0; j < 25; ++j)
+                {
+                    stateAtReplayCutoff.Add([]);
+                }
+
+                int i = lastNewCard;
+                for (; i < infoList.Count; ++i)
+                {
+                    if (ParseTimestampString(infoList[i].Timestamp) >= cutoff)
+                    {
+                        break;
+                    }
+                    if (infoList[i] is GoalUpdateEventInfo)
+                    {
+                        GoalUpdateEventInfo goalUpdate = infoList[i] as GoalUpdateEventInfo;
+                        if (goalUpdate.Unmarking)
+                        {
+                            stateAtReplayCutoff[goalUpdate.Index].Remove(goalUpdate.Color);
+                        }
+                        else
+                        {
+                            stateAtReplayCutoff[goalUpdate.Index].Add(goalUpdate.Color);
+                        }
+                    }
+                }
+                return i;
+            }
+            void replicatePreCutoff(List<HashSet<Colors>> stateAtReplayCutoff, bool unmark = false)
+            {
+                for(int i = 0; i < 25; ++i)
+                {
+                    foreach (Colors color in stateAtReplayCutoff[i])
+                    {
+                        if (!Replayer.Board.SquaresToDisplay[i].MarkedBy.Contains(color))
+                        {
+                            Replayer.SelectIndex(i, color, () => { });
+                        }
+                    }
+                    if (unmark)
+                    {
+                        foreach (Colors color in Replayer.Board.SquaresToDisplay[i].MarkedBy)
+                        {
+                            if (!stateAtReplayCutoff[i].Contains(color))
+                            {
+                                Replayer.SelectIndex(i, color, () => { }, true);
+                            }
+                        }
+                    }
+                }
+            }
+            int restartSecondaryDelays(List<RoomEventInfo> infoList, int firstAfterCutoff)
+            {
+                DateTimeOffset cutoff = DateTimeOffset.UtcNow - TimeSpan.FromSeconds(ReplayUI.MainDelay);
+                int i = firstAfterCutoff;
+                for (; i < infoList.Count; ++i)
+                {
+                    if (ParseTimestampString(infoList[i].Timestamp) >= cutoff)
+                    {
+                        break;
+                    }
+                    if (infoList[i] is GoalUpdateEventInfo)
+                    {
+                        GoalUpdateEventInfo goalUpdate = infoList[i] as GoalUpdateEventInfo;
+                        int delayLeft = (ParseTimestampString(goalUpdate.Timestamp) - cutoff).Seconds;
+                        CancellableDelayedMark(Replayer, goalUpdate, CurrentReplayId, delayLeft);
+                    }
+                }
+                return i;
+            }
+            void restartMainDelays(List<RoomEventInfo> infoList, int mainDelayCutoff)
+            {
+                int i = mainDelayCutoff;
+                for (; i < infoList.Count; ++i)
+                {
+                    if (infoList[i] is GoalUpdateEventInfo)
+                    {
+                        GoalUpdateEventInfo goalUpdate = infoList[i] as GoalUpdateEventInfo;
+                        int mainDelay = (DateTimeOffset.UtcNow - ParseTimestampString(goalUpdate.Timestamp)).Seconds;
+                        MakeDelayedMarkReplayer(mainDelay, Replayer, CurrentReplayId)(Listener, goalUpdate);
+                    }
+                }
+            }
+
+            StartReplay(() =>
+            {
+                Listener.ProcessRoomHistory((infoList) =>
+                {
+                    int lastNewCard = findLastNewCardIndex(infoList);
+                    List<HashSet<Colors>> stateAtReplayCutoff = [];
+                    int cutoffIndex = parseStateUntilCutoff(infoList, lastNewCard, stateAtReplayCutoff);
+                    replicatePreCutoff(stateAtReplayCutoff, false);
+                    int mainDelayCutoff = restartSecondaryDelays(infoList, cutoffIndex);
+                    restartMainDelays(infoList, mainDelayCutoff);
+                }, () => { });
+            });
+        }
+
+        public void CancellableDelayedMark(Session replayer, GoalUpdateEventInfo goalUpdate, Guid markReplayId, int delaySeconds)
+        {
+            Task.Run(() =>
+            {
+                Thread.Sleep(delaySeconds * 1000);
+                if (markReplayId == CurrentReplayId)
+                {
+                    --GoalsInProgress;
+                    replayer.SelectIndex(goalUpdate.Index, goalUpdate.Color, () => Log($"Could not mark slot {goalUpdate.Index + 1}."), goalUpdate.Unmarking);
+                }
+            });
+        }
+        
         public void SetUIVisible(bool visible)
         {
             ReplayUI.IsVisible = visible;
@@ -232,5 +364,9 @@ namespace BingoBoardReplay
 
         public bool ToggleButtonInsideMenu => false;
 
+        private static DateTimeOffset ParseTimestampString(string timestamp)
+        {
+            return DateTimeOffset.FromUnixTimeMilliseconds(Convert.ToInt64(Double.Parse(timestamp) * 1000));
+        }
     }
 }

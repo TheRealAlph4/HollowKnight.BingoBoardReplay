@@ -56,6 +56,7 @@ namespace BingoBoardReplay
         private readonly static Button replayButton;
         private readonly static TextInput goalsInProgressText;
         private readonly static Button reproduceButton;
+        private readonly static Button reconnectButton;
         
         private readonly static List<Button> destinationRoomColorButtons = [];
 
@@ -80,7 +81,7 @@ namespace BingoBoardReplay
         public static bool IsVisible { get; set; } = false;
 
         private static bool _isReplaying = false;
-        private static bool IsReplaying
+        public static bool IsReplaying
         {
             get
             {
@@ -91,14 +92,12 @@ namespace BingoBoardReplay
                 _isReplaying = value;
                 if (_isReplaying)
                 {
-                    BingoBoardReplay.Instance.StartReplay();
                     replayButton.Enabled = false;
                 }
                 else
                 {
                     SourceRoomTextSuffix = "";
                     DestinationRoomTextSuffix = "";
-                    BingoBoardReplay.Instance.StopReplay();
                     reproduceButton.Enabled = false;
                 }
                 SetUIReplaying(value);
@@ -346,6 +345,16 @@ namespace BingoBoardReplay
                 Padding = GENERAL_PADDING,
                 HorizontalAlignment = HorizontalAlignment.Center,
             };
+            reconnectButton = new Button(layoutRoot, "BingoBoardReplay ReconnectButton")
+            {
+                Content = "Reconnect",
+                MinWidth = MIDDLE_WIDTH,
+                MinHeight = BIG_BUTTON_HEIGHT,
+                FontSize = NORMAL_FONT_SIZE,
+                Enabled = true,
+                Padding = GENERAL_PADDING,
+                HorizontalAlignment = HorizontalAlignment.Center,
+            };
 
             secondaryDelayText = new TextObject(layoutRoot, "BingoBoardReplay SecondaryDelayText")
             {
@@ -510,6 +519,7 @@ namespace BingoBoardReplay
             middleStack.Children.Add(replayButton);
             middleStack.Children.Add(goalsInProgressText);
             middleStack.Children.Add(reproduceButton);
+            middleStack.Children.Add(reconnectButton);
 
             mainStack.Children.Add(sourceRoomStack);
             mainStack.Children.Add(middleStack);
@@ -537,6 +547,7 @@ namespace BingoBoardReplay
             increaseSecondaryDelay.Click += IncreaseSecondaryDelayOnClick;
             decreaseSecondaryDelay.Click += DecreaseSecondaryDelayOnClick;
             reproduceButton.Click += ReproduceButtonOnClick;
+            reconnectButton.Click += ReconnectButtonOnClick;
 
             lockoutSettingAlwaysButton.Click += SetLockoutGlobalSettingTo(GlobalSettings.CloneRoomOption.Always);
             lockoutSettingNeverButton.Click += SetLockoutGlobalSettingTo(GlobalSettings.CloneRoomOption.Never);
@@ -557,7 +568,14 @@ namespace BingoBoardReplay
             {
                 return;
             }
-            IsReplaying = !IsReplaying;
+            if(IsReplaying)
+            {
+                BingoBoardReplay.Instance.StopReplay();
+            }
+            else
+            {
+                BingoBoardReplay.Instance.StartReplay();
+            }
         }
 
         private static void SetUIReplaying(bool replaying)
@@ -700,6 +718,11 @@ namespace BingoBoardReplay
                 button.BorderColor = GLOBAL_SETTINGS_ACTIVE_COLOR;
                 BingoBoardReplay.Instance.Settings.HideWhenCloning = value;
             };
+        }
+
+        private static void ReconnectButtonOnClick(Button _)
+        {
+            BingoBoardReplay.Instance.Reconnect();
         }
     }
 }
