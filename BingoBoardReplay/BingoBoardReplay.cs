@@ -14,7 +14,7 @@ namespace BingoBoardReplay
     {
         new public string GetName() => "BingoBoardReplay";
 
-        public static string version = "1.3.3.1";
+        public static string version = "1.3.3.2";
         public override string GetVersion() => version;
 
         public static BingoBoardReplay Instance;

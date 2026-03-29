@@ -1,5 +1,4 @@
 ﻿using BingoSync;
-using BingoSync.Sessions;
 using MagicUI.Core;
 using MagicUI.Elements;
 using System;
@@ -15,12 +14,20 @@ namespace BingoBoardReplay
         private const int WIDE_WIDTH = 600;
         private const int MIDDLE_WIDTH = 200;
         private const int COLOR_BUTTON_WIDTH = 100;
+        private const int SETTING_BUTTON_WIDTH = 100;
 
+        private const int SETTING_BUTTON_HEIGHT = 35;
+        private const int BIG_BUTTON_HEIGHT = 50;
+
+        private const int SMALL_FONT_SIZE = 16;
         private const int NORMAL_FONT_SIZE = 22;
         private const int BIG_FONT_SIZE = 32;
 
         private readonly static Padding TITLE_PADDING = new(0, 25, 0, 5);
         private readonly static Padding GENERAL_PADDING = new(5);
+
+        private readonly static Color GLOBAL_SETTINGS_INACTIVE_COLOR = Color.white;
+        private readonly static Color GLOBAL_SETTINGS_ACTIVE_COLOR = Color.red;
 
         private readonly static LayoutRoot layoutRoot;
         private readonly static StackLayout mainStack;
@@ -52,6 +59,22 @@ namespace BingoBoardReplay
         
         private readonly static List<Button> destinationRoomColorButtons = [];
 
+        private readonly static StackLayout globalSettingsStack;
+        private readonly static StackLayout hideCardSettingStack;
+        private readonly static StackLayout lockoutSettingStack;
+
+        private readonly static TextObject globalSettingsText;
+
+        private readonly static TextObject lockoutSettingText;
+        private readonly static Button lockoutSettingAlwaysButton;
+        private readonly static Button lockoutSettingNeverButton;
+        private readonly static Button lockoutSettingCopyButton;
+
+        private readonly static TextObject hideCardSettingText;
+        private readonly static Button hideCardSettingAlwaysButton;
+        private readonly static Button hideCardSettingNeverButton;
+        private readonly static Button hideCardSettingCopyButton;
+        
         private static Action<string> Log;
 
         public static bool IsVisible { get; set; } = false;
@@ -298,7 +321,7 @@ namespace BingoBoardReplay
             {
                 Content = "Start Replay",
                 MinWidth = MIDDLE_WIDTH,
-                MinHeight = 50,
+                MinHeight = BIG_BUTTON_HEIGHT,
                 FontSize = NORMAL_FONT_SIZE,
                 Padding = GENERAL_PADDING,
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -317,7 +340,7 @@ namespace BingoBoardReplay
             {
                 Content = "Clone Board",
                 MinWidth = MIDDLE_WIDTH,
-                MinHeight = 50,
+                MinHeight = BIG_BUTTON_HEIGHT,
                 FontSize = NORMAL_FONT_SIZE,
                 Enabled = false,
                 Padding = GENERAL_PADDING,
@@ -356,6 +379,109 @@ namespace BingoBoardReplay
                 Padding = GENERAL_PADDING,
             };
 
+            globalSettingsStack = new StackLayout(layoutRoot, "BingoBoardReplay GlobalSettingsStack")
+            {
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Orientation = Orientation.Vertical,
+                Padding = new(5, 0, 0, 20),
+            };
+            lockoutSettingStack = new StackLayout(layoutRoot, "BingoBoardReplay LockoutSettingStack")
+            {
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Orientation = Orientation.Horizontal,
+                Padding = GENERAL_PADDING,
+            };
+            hideCardSettingStack = new StackLayout(layoutRoot, "BingoBoardReplay HideCardSettingStack")
+            {
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Orientation = Orientation.Horizontal,
+                Padding = GENERAL_PADDING,
+            };
+
+            globalSettingsText = new TextObject(layoutRoot, "BingoBoardReplay GlobalSettingsText")
+            {
+                Text = "Clone Settings",
+                FontSize = BIG_FONT_SIZE,
+                Padding = GENERAL_PADDING,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+
+            lockoutSettingText = new TextObject(layoutRoot, "BingoBoardReplay LockoutSettingText")
+            {
+                Text = "Lockout Mode: ",
+                FontSize = NORMAL_FONT_SIZE,
+                Padding = GENERAL_PADDING,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            lockoutSettingAlwaysButton = new Button(layoutRoot, "BingoBoardReplay LockoutSettingAlwaysButton")
+            {
+                Content = "Always",
+                MinWidth = SETTING_BUTTON_WIDTH,
+                MinHeight = SETTING_BUTTON_HEIGHT,
+                FontSize = SMALL_FONT_SIZE,
+                Padding = GENERAL_PADDING,
+                BorderColor = BingoBoardReplay.Instance.Settings.LockoutWhenCloning == GlobalSettings.CloneRoomOption.Always ? GLOBAL_SETTINGS_ACTIVE_COLOR : GLOBAL_SETTINGS_INACTIVE_COLOR,
+            };
+            lockoutSettingNeverButton = new Button(layoutRoot, "BingoBoardReplay LockoutSettingNeverButton")
+            {
+                Content = "Never",
+                MinWidth = SETTING_BUTTON_WIDTH,
+                MinHeight = SETTING_BUTTON_HEIGHT,
+                FontSize = SMALL_FONT_SIZE,
+                Padding = GENERAL_PADDING,
+                BorderColor = BingoBoardReplay.Instance.Settings.LockoutWhenCloning == GlobalSettings.CloneRoomOption.Never ? GLOBAL_SETTINGS_ACTIVE_COLOR : GLOBAL_SETTINGS_INACTIVE_COLOR,
+            };
+            lockoutSettingCopyButton = new Button(layoutRoot, "BingoBoardReplay LockoutSettingCopyButton")
+            {
+                Content = "Copy",
+                MinWidth = SETTING_BUTTON_WIDTH,
+                MinHeight = SETTING_BUTTON_HEIGHT,
+                FontSize = SMALL_FONT_SIZE,
+                Padding = GENERAL_PADDING,
+                BorderColor = BingoBoardReplay.Instance.Settings.LockoutWhenCloning == GlobalSettings.CloneRoomOption.Copy ? GLOBAL_SETTINGS_ACTIVE_COLOR : GLOBAL_SETTINGS_INACTIVE_COLOR,
+            };
+
+            hideCardSettingText = new TextObject(layoutRoot, "BingoBoardReplay HideCardSettingText")
+            {
+                Text = "Hide Card: ",
+                FontSize = NORMAL_FONT_SIZE,
+                Padding = GENERAL_PADDING,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            hideCardSettingAlwaysButton = new Button(layoutRoot, "BingoBoardReplay HideCardSettingAlwaysButton")
+            {
+                Content = "Always",
+                MinWidth = SETTING_BUTTON_WIDTH,
+                MinHeight = SETTING_BUTTON_HEIGHT,
+                FontSize = SMALL_FONT_SIZE,
+                Padding = GENERAL_PADDING,
+                BorderColor = BingoBoardReplay.Instance.Settings.HideWhenCloning == GlobalSettings.CloneRoomOption.Always ? GLOBAL_SETTINGS_ACTIVE_COLOR : GLOBAL_SETTINGS_INACTIVE_COLOR,
+            };
+            hideCardSettingNeverButton = new Button(layoutRoot, "BingoBoardReplay HideCardSettingNeverButton")
+            {
+                Content = "Never",
+                MinWidth = SETTING_BUTTON_WIDTH,
+                MinHeight = SETTING_BUTTON_HEIGHT,
+                FontSize = SMALL_FONT_SIZE,
+                Padding = GENERAL_PADDING,
+                BorderColor = BingoBoardReplay.Instance.Settings.HideWhenCloning == GlobalSettings.CloneRoomOption.Never ? GLOBAL_SETTINGS_ACTIVE_COLOR : GLOBAL_SETTINGS_INACTIVE_COLOR,
+            };
+            hideCardSettingCopyButton = new Button(layoutRoot, "BingoBoardReplay HideCardSettingCopyButton")
+            {
+                Content = "Copy",
+                MinWidth = SETTING_BUTTON_WIDTH,
+                MinHeight = SETTING_BUTTON_HEIGHT,
+                FontSize = SMALL_FONT_SIZE,
+                Padding = GENERAL_PADDING,
+                BorderColor = BingoBoardReplay.Instance.Settings.HideWhenCloning == GlobalSettings.CloneRoomOption.Copy ? GLOBAL_SETTINGS_ACTIVE_COLOR : GLOBAL_SETTINGS_INACTIVE_COLOR,
+            };
+
             ArrangeUIElements();
             SetupOnClicks();
         }
@@ -388,6 +514,21 @@ namespace BingoBoardReplay
             mainStack.Children.Add(sourceRoomStack);
             mainStack.Children.Add(middleStack);
             mainStack.Children.Add(destinationRoomStack);
+
+
+            lockoutSettingStack.Children.Add(lockoutSettingAlwaysButton);
+            lockoutSettingStack.Children.Add(lockoutSettingNeverButton);
+            lockoutSettingStack.Children.Add(lockoutSettingCopyButton);
+
+            hideCardSettingStack.Children.Add(hideCardSettingAlwaysButton);
+            hideCardSettingStack.Children.Add(hideCardSettingNeverButton);
+            hideCardSettingStack.Children.Add(hideCardSettingCopyButton);
+
+            globalSettingsStack.Children.Add(globalSettingsText);
+            globalSettingsStack.Children.Add(lockoutSettingText);
+            globalSettingsStack.Children.Add(lockoutSettingStack);
+            globalSettingsStack.Children.Add(hideCardSettingText);
+            globalSettingsStack.Children.Add(hideCardSettingStack);
         }
 
         private static void SetupOnClicks()
@@ -395,7 +536,15 @@ namespace BingoBoardReplay
             replayButton.Click += ReplayButtonOnClick;
             increaseSecondaryDelay.Click += IncreaseSecondaryDelayOnClick;
             decreaseSecondaryDelay.Click += DecreaseSecondaryDelayOnClick;
-            reproduceButton.Click += ReproduceButtonOnClick; 
+            reproduceButton.Click += ReproduceButtonOnClick;
+
+            lockoutSettingAlwaysButton.Click += SetLockoutGlobalSettingTo(GlobalSettings.CloneRoomOption.Always);
+            lockoutSettingNeverButton.Click += SetLockoutGlobalSettingTo(GlobalSettings.CloneRoomOption.Never);
+            lockoutSettingCopyButton.Click += SetLockoutGlobalSettingTo(GlobalSettings.CloneRoomOption.Copy);
+
+            hideCardSettingAlwaysButton.Click += SetHideCardGlobalSettingTo(GlobalSettings.CloneRoomOption.Always);
+            hideCardSettingNeverButton.Click += SetHideCardGlobalSettingTo(GlobalSettings.CloneRoomOption.Never);
+            hideCardSettingCopyButton.Click += SetHideCardGlobalSettingTo(GlobalSettings.CloneRoomOption.Copy);
         }
 
         private static void ReplayButtonOnClick(Button _)
@@ -518,6 +667,38 @@ namespace BingoBoardReplay
                 }
                 button.BorderColor = Color.white;
                 BingoBoardReplay.Instance.Replayer.SetColor(color);
+            };
+        }
+
+        private static Action<Button> SetLockoutGlobalSettingTo(GlobalSettings.CloneRoomOption value)
+        {
+            return button => {
+                foreach (ArrangableElement element in lockoutSettingStack.Children)
+                {
+                    if (element is Button)
+                    {
+                        Button other = element as Button;
+                        other.BorderColor = GLOBAL_SETTINGS_INACTIVE_COLOR;
+                    }
+                }
+                button.BorderColor = GLOBAL_SETTINGS_ACTIVE_COLOR;
+                BingoBoardReplay.Instance.Settings.LockoutWhenCloning = value;
+            };
+        }
+
+        private static Action<Button> SetHideCardGlobalSettingTo(GlobalSettings.CloneRoomOption value)
+        {
+            return button => {
+                foreach (ArrangableElement element in hideCardSettingStack.Children)
+                {
+                    if (element is Button)
+                    {
+                        Button other = element as Button;
+                        other.BorderColor = GLOBAL_SETTINGS_INACTIVE_COLOR;
+                    }
+                }
+                button.BorderColor = GLOBAL_SETTINGS_ACTIVE_COLOR;
+                BingoBoardReplay.Instance.Settings.HideWhenCloning = value;
             };
         }
     }
