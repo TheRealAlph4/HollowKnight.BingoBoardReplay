@@ -15,7 +15,7 @@ namespace BingoBoardReplay
     {
         new public string GetName() => "BingoBoardReplay";
 
-        public static string version = "1.3.4.2";
+        public static string version = "1.3.4.3";
         public override string GetVersion() => version;
 
         public static BingoBoardReplay Instance;
@@ -36,7 +36,7 @@ namespace BingoBoardReplay
             }
             set
             {
-                _goalsInProgress = value;
+                Interlocked.Exchange(ref _goalsInProgress, value);
                 ReplayUI.MarksInQueue = _goalsInProgress;
             }
         }
@@ -112,11 +112,11 @@ namespace BingoBoardReplay
 
                 ReplayUI.BothClientsConnected = true;
 
-                Listener.RevealCard();
-                Replayer.RevealCard();
-
                 currentReplayer = MakeDelayedMarkReplayer(TimeSpan.FromSeconds(ReplayUI.MainDelay), Replayer, CurrentReplayId);
                 Listener.OnGoalUpdateReceived += currentReplayer;
+
+                Listener.RevealCard();
+                Replayer.RevealCard();
 
                 callback?.Invoke();
             });
@@ -230,24 +230,24 @@ namespace BingoBoardReplay
             static Tuple<DateTimeOffset, DateTimeOffset> findStartEndTimestamps(List<RoomEventInfo> infoList)
             {
                 int lastNewCard = 0;
-                int replayBotJoin = infoList.Count - 1;
+                int replayBotReveal = infoList.Count - 1;
                 for (int i = 0; i < infoList.Count; ++i)
                 {
                     if (infoList[i] is NewCardEventInfo)
                     {
                         lastNewCard = i;
                     }
-                    if (infoList[i] is PlayerConnectionEventInfo)
+                    if (infoList[i] is CardRevealedEventInfo)
                     {
-                        PlayerConnectionEventInfo connection = infoList[i] as PlayerConnectionEventInfo;
-                        if (connection.Player.UUID == Instance.Listener.RoomPlayerUUID)
+                        CardRevealedEventInfo reveal = infoList[i] as CardRevealedEventInfo;
+                        if (reveal.Player.UUID == Instance.Listener.RoomPlayerUUID)
                         {
-                            replayBotJoin = i;
+                            replayBotReveal = i;
                         }
                     }
                 }
                 DateTimeOffset start = ParseTimestampString(infoList[lastNewCard].Timestamp);
-                DateTimeOffset end = ParseTimestampString(infoList[replayBotJoin].Timestamp);
+                DateTimeOffset end = ParseTimestampString(infoList[replayBotReveal].Timestamp);
                 return new Tuple<DateTimeOffset, DateTimeOffset>(start, end);
             }
             static int parseStateUntilCutoff(List<GoalUpdateEventInfo> goalUpdates, List<HashSet<Colors>> stateAtReplayCutoff)
