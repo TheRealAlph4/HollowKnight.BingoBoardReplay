@@ -15,7 +15,7 @@ namespace BingoBoardReplay
     {
         new public string GetName() => "BingoBoardReplay";
 
-        public static string version = "1.3.4.1";
+        public static string version = "1.3.4.2";
         public override string GetVersion() => version;
 
         public static BingoBoardReplay Instance;
@@ -115,7 +115,7 @@ namespace BingoBoardReplay
                 Listener.RevealCard();
                 Replayer.RevealCard();
 
-                currentReplayer = MakeDelayedMarkReplayer(ReplayUI.MainDelay, Replayer, CurrentReplayId);
+                currentReplayer = MakeDelayedMarkReplayer(TimeSpan.FromSeconds(ReplayUI.MainDelay), Replayer, CurrentReplayId);
                 Listener.OnGoalUpdateReceived += currentReplayer;
 
                 callback?.Invoke();
@@ -203,14 +203,14 @@ namespace BingoBoardReplay
             waitingForReproduceBoard = false;
         }
 
-        private EventHandler<GoalUpdateEventInfo> MakeDelayedMarkReplayer(int delaySeconds, Session replayer, Guid markReplayId)
+        private EventHandler<GoalUpdateEventInfo> MakeDelayedMarkReplayer(TimeSpan delay, Session replayer, Guid markReplayId)
         {
             return (sender, goalUpdate) =>
             {
                 ++GoalsInProgress;
                 Task.Run(() =>
                 {
-                    Thread.Sleep(delaySeconds * 1000);
+                    Thread.Sleep(delay);
 
                     Task.Run(() =>
                     {
@@ -227,34 +227,30 @@ namespace BingoBoardReplay
 
         public void Reconnect()
         {
-            static NewCardEventInfo findLastNewCardIndex(List<RoomEventInfo> infoList)
+            static Tuple<DateTimeOffset, DateTimeOffset> findStartEndTimestamps(List<RoomEventInfo> infoList)
             {
-                int lastNewCard = -1;
+                int lastNewCard = 0;
+                int replayBotJoin = infoList.Count - 1;
                 for (int i = 0; i < infoList.Count; ++i)
                 {
                     if (infoList[i] is NewCardEventInfo)
                     {
                         lastNewCard = i;
                     }
-                }
-                if (lastNewCard == -1)
-                {
-                    return null;
-                }
-                return infoList[lastNewCard] as NewCardEventInfo;
-            }
-            static int findFirstRelevantGoalUpdate(List<GoalUpdateEventInfo> goalUpdates, DateTimeOffset cutoffTimestamp)
-            {
-                for (int i = 0; i < goalUpdates.Count; ++i)
-                {
-                    if (ParseTimestampString(goalUpdates[i].Timestamp) >= cutoffTimestamp)
+                    if (infoList[i] is PlayerConnectionEventInfo)
                     {
-                        return i;
+                        PlayerConnectionEventInfo connection = infoList[i] as PlayerConnectionEventInfo;
+                        if (connection.Player.UUID == Instance.Listener.RoomPlayerUUID)
+                        {
+                            replayBotJoin = i;
+                        }
                     }
                 }
-                return goalUpdates.Count;
+                DateTimeOffset start = ParseTimestampString(infoList[lastNewCard].Timestamp);
+                DateTimeOffset end = ParseTimestampString(infoList[replayBotJoin].Timestamp);
+                return new Tuple<DateTimeOffset, DateTimeOffset>(start, end);
             }
-            static int parseStateUntilCutoff(List<GoalUpdateEventInfo> goalUpdates, int lastNewCard, List<HashSet<Colors>> stateAtReplayCutoff)
+            static int parseStateUntilCutoff(List<GoalUpdateEventInfo> goalUpdates, List<HashSet<Colors>> stateAtReplayCutoff)
             {
                 DateTimeOffset cutoff = DateTimeOffset.UtcNow - TimeSpan.FromSeconds(ReplayUI.MainDelay + ReplayUI.SecondaryDelay);
                 for (int j = 0; j < 25; ++j)
@@ -262,7 +258,7 @@ namespace BingoBoardReplay
                     stateAtReplayCutoff.Add([]);
                 }
 
-                int i = lastNewCard;
+                int i = 0;
                 for (; i < goalUpdates.Count; ++i)
                 {
                     if (ParseTimestampString(goalUpdates[i].Timestamp) >= cutoff)
@@ -315,7 +311,7 @@ namespace BingoBoardReplay
                         break;
                     }
                     GoalUpdateEventInfo goalUpdate = goalUpdates[i];
-                    int delayLeft = (TimeSpan.FromSeconds(ReplayUI.SecondaryDelay) - (cutoff - ParseTimestampString(goalUpdate.Timestamp))).Seconds;
+                    TimeSpan delayLeft = TimeSpan.FromSeconds(ReplayUI.SecondaryDelay) - (cutoff - ParseTimestampString(goalUpdate.Timestamp));
                     CancellableDelayedMark(Replayer, goalUpdate, CurrentReplayId, delayLeft);
                 }
                 return i;
@@ -326,46 +322,46 @@ namespace BingoBoardReplay
                 for (; i < goalUpdates.Count; ++i)
                 {
                     GoalUpdateEventInfo goalUpdate = goalUpdates[i];
-                    int mainDelay = (TimeSpan.FromSeconds(ReplayUI.MainDelay) - (DateTimeOffset.UtcNow - ParseTimestampString(goalUpdate.Timestamp))).Seconds;
+                    TimeSpan mainDelay = TimeSpan.FromSeconds(ReplayUI.MainDelay) - (DateTimeOffset.UtcNow - ParseTimestampString(goalUpdate.Timestamp));
                     MakeDelayedMarkReplayer(mainDelay, Replayer, CurrentReplayId)(Listener, goalUpdate);
                 }
             }
 
-            Log("before start replay");
             StartReplay(() =>
             {
-                Log("after start replay");
                 Listener.ProcessRoomHistory((infoList) =>
                 {
                     List<GoalUpdateEventInfo> goalUpdates = [];
+                    Tuple<DateTimeOffset, DateTimeOffset> startEndTuple = findStartEndTimestamps(infoList);
+                    DateTimeOffset start = startEndTuple.Item1;
+                    DateTimeOffset end = startEndTuple.Item2;
                     foreach (RoomEventInfo info in infoList)
                     {
                         if(info is GoalUpdateEventInfo)
                         {
-                            goalUpdates.Add(info as GoalUpdateEventInfo);
+                            GoalUpdateEventInfo goalUpdate = info as GoalUpdateEventInfo;
+                            DateTimeOffset timestamp = ParseTimestampString(goalUpdate.Timestamp);
+                            if ((start <= timestamp) && (timestamp <= end))
+                            {
+                                goalUpdates.Add(goalUpdate);
+                            }
                         }
                     }
-                    Log("Started replay");
-                    NewCardEventInfo lastNewCard = findLastNewCardIndex(infoList);
-                    int firstRelevantGoal = findFirstRelevantGoalUpdate(goalUpdates, ParseTimestampString(lastNewCard.Timestamp));
-                    Log($"first relevant goal is {firstRelevantGoal}");
                     List<HashSet<Colors>> stateAtReplayCutoff = [];
-                    int cutoffIndex = parseStateUntilCutoff(goalUpdates, firstRelevantGoal, stateAtReplayCutoff);
-                    Log($"cutoff index is {cutoffIndex}");
+                    int cutoffIndex = parseStateUntilCutoff(goalUpdates, stateAtReplayCutoff);
                     replicatePreCutoff(stateAtReplayCutoff, false);
                     int mainDelayCutoff = restartSecondaryDelays(goalUpdates, cutoffIndex);
-                    Log($"main delay cutoff {mainDelayCutoff}");
                     restartMainDelays(goalUpdates, mainDelayCutoff);
                 }, () => { });
             });
         }
 
-        public void CancellableDelayedMark(Session replayer, GoalUpdateEventInfo goalUpdate, Guid markReplayId, int delaySeconds)
+        public void CancellableDelayedMark(Session replayer, GoalUpdateEventInfo goalUpdate, Guid markReplayId, TimeSpan delay)
         {
             Task.Run(() =>
             {
                 ++GoalsInProgress;
-                Thread.Sleep(delaySeconds * 1000);
+                Thread.Sleep(delay);
                 if (markReplayId == CurrentReplayId)
                 {
                     --GoalsInProgress;
