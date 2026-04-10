@@ -15,7 +15,7 @@ namespace BingoBoardReplay
     {
         new public string GetName() => "BingoBoardReplay";
 
-        public static string version = "1.3.4.3";
+        public static string version = "1.3.4.4";
         public override string GetVersion() => version;
 
         public static BingoBoardReplay Instance;
@@ -108,6 +108,12 @@ namespace BingoBoardReplay
                 while(Replayer.ClientIsConnecting())
                 {
                     Thread.Sleep(250);
+                }
+
+                if (!Listener.ClientIsConnected() || !Replayer.ClientIsConnected())
+                {
+                    StopReplay();
+                    return;
                 }
 
                 ReplayUI.BothClientsConnected = true;

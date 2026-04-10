@@ -93,12 +93,14 @@ namespace BingoBoardReplay
                 if (_isReplaying)
                 {
                     replayButton.Enabled = false;
+                    reconnectButton.Enabled = false;
                 }
                 else
                 {
                     SourceRoomTextSuffix = "";
                     DestinationRoomTextSuffix = "";
                     reproduceButton.Enabled = false;
+                    reconnectButton.Enabled = true;
                 }
                 SetUIReplaying(value);
             }
@@ -108,20 +110,10 @@ namespace BingoBoardReplay
         {
             set
             {
-                if(value)
+                replayButton.Enabled = true;
+                foreach (Button button in destinationRoomColorButtons)
                 {
-                    replayButton.Enabled = true;
-                    foreach (Button button in destinationRoomColorButtons)
-                    {
-                        button.Enabled = true;
-                    }
-                }
-                else
-                {
-                    foreach (Button button in destinationRoomColorButtons)
-                    {
-                        button.Enabled = false;
-                    }
+                    button.Enabled = value;
                 }
             }
         }
@@ -722,6 +714,13 @@ namespace BingoBoardReplay
 
         private static void ReconnectButtonOnClick(Button _)
         {
+            if (string.IsNullOrWhiteSpace(SourceRoomCode) ||
+                string.IsNullOrWhiteSpace(SourceRoomPassword) ||
+                string.IsNullOrWhiteSpace(DestinationRoomCode) ||
+                string.IsNullOrWhiteSpace(DestinationRoomPassword))
+            {
+                return;
+            }
             BingoBoardReplay.Instance.Reconnect();
         }
     }
