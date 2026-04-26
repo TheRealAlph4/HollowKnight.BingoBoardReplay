@@ -1,4 +1,5 @@
 ﻿using BingoSync;
+using BingoSync.Sessions;
 using MagicUI.Core;
 using MagicUI.Elements;
 using System;
@@ -30,7 +31,8 @@ namespace BingoBoardReplay
         private readonly static Color GLOBAL_SETTINGS_ACTIVE_COLOR = Color.red;
 
         private readonly static LayoutRoot layoutRoot;
-        private readonly static StackLayout mainStack;
+        private readonly static StackLayout mainVerticalStack;
+        private readonly static StackLayout mainReplayStack;
         private readonly static StackLayout sourceRoomStack;
         private readonly static StackLayout middleStack;
         private readonly static StackLayout destinationRoomStack;
@@ -43,7 +45,6 @@ namespace BingoBoardReplay
         private readonly static TextObject destinationRoomText;
         private readonly static TextInput destinationLink;
         private readonly static TextInput destinationPassword;
-        private readonly static StackLayout destinationColorSelector;
 
         private readonly static TextObject mainDelayText;
         private readonly static TextInput mainDelay;
@@ -57,8 +58,17 @@ namespace BingoBoardReplay
         private readonly static TextInput goalsInProgressText;
         private readonly static Button reproduceButton;
         private readonly static Button reconnectButton;
-        
-        private readonly static List<Button> destinationRoomColorButtons = [];
+
+        private readonly static StackLayout colorDummiesStack;
+        private readonly static StackLayout dummy1Row;
+        private readonly static StackLayout dummy2Row;
+        private readonly static TextObject dummy1Text;
+        private readonly static TextObject dummy2Text;
+        private readonly static StackLayout dummy1ColorSelector;
+        private readonly static StackLayout dummy2ColorSelector;
+
+        private readonly static List<Button> dummy1ColorButtons = [];
+        private readonly static List<Button> dummy2ColorButtons = [];
 
         private readonly static StackLayout globalSettingsStack;
         private readonly static StackLayout hideCardSettingStack;
@@ -111,7 +121,11 @@ namespace BingoBoardReplay
             set
             {
                 replayButton.Enabled = true;
-                foreach (Button button in destinationRoomColorButtons)
+                foreach (Button button in dummy1ColorButtons)
+                {
+                    button.Enabled = value;
+                }
+                foreach (Button button in dummy2ColorButtons)
                 {
                     button.Enabled = value;
                 }
@@ -207,7 +221,15 @@ namespace BingoBoardReplay
             {
                 VisibilityCondition = () => IsVisible
             };
-            mainStack = new StackLayout(layoutRoot, "BingoBoardReplay MainStack")
+            mainVerticalStack = new StackLayout(layoutRoot, "BingoBoardReplay MainVerticalStack")
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Orientation = Orientation.Vertical,
+                Padding = GENERAL_PADDING,
+            };
+
+            mainReplayStack = new StackLayout(layoutRoot, "BingoBoardReplay MainReplayStack")
             {
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -288,7 +310,47 @@ namespace BingoBoardReplay
                 ContentType = ContentType.Password,
                 Padding = GENERAL_PADDING,
             };
-            destinationColorSelector = CreateDestinationRoomColorSelector();
+
+            colorDummiesStack = new StackLayout(layoutRoot, "BingoBoardReplay ColorDummiesStack")
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Orientation = Orientation.Vertical,
+                Padding = GENERAL_PADDING,
+            };
+            dummy1Row = new StackLayout(layoutRoot, "BingoBoardReplay Dummy1Row")
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Orientation = Orientation.Horizontal,
+                Padding = GENERAL_PADDING,
+            };
+            dummy2Row = new StackLayout(layoutRoot, "BingoBoardReplay Dummy2Row")
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Orientation = Orientation.Horizontal,
+                Padding = GENERAL_PADDING,
+            };
+            dummy1Text = new TextObject(layoutRoot, "BingoBoardReplay Dummy1Text")
+            {
+                Text = "Color Dummy 1: ",
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                FontSize = BIG_FONT_SIZE,
+                Padding = GENERAL_PADDING,
+            };
+            dummy2Text = new TextObject(layoutRoot, "BingoBoardReplay Dummy2Text")
+            {
+                Text = "Color Dummy 2: ",
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                FontSize = BIG_FONT_SIZE,
+                Padding = GENERAL_PADDING,
+            };
+
+            dummy1ColorSelector = CreateDummyColorSelector(true);
+            dummy2ColorSelector = CreateDummyColorSelector(false);
 
             mainDelayText = new TextObject(layoutRoot, "BingoBoardReplay MainDelayText")
             {
@@ -497,7 +559,6 @@ namespace BingoBoardReplay
             destinationRoomStack.Children.Add(destinationRoomText);
             destinationRoomStack.Children.Add(destinationLink);
             destinationRoomStack.Children.Add(destinationPassword);
-            destinationRoomStack.Children.Add(destinationColorSelector);
 
             middleStack.Children.Add(mainDelayText);
             middleStack.Children.Add(mainDelay);
@@ -513,10 +574,21 @@ namespace BingoBoardReplay
             middleStack.Children.Add(reproduceButton);
             middleStack.Children.Add(reconnectButton);
 
-            mainStack.Children.Add(sourceRoomStack);
-            mainStack.Children.Add(middleStack);
-            mainStack.Children.Add(destinationRoomStack);
+            mainReplayStack.Children.Add(sourceRoomStack);
+            mainReplayStack.Children.Add(middleStack);
+            mainReplayStack.Children.Add(destinationRoomStack);
 
+            dummy1Row.Children.Add(dummy1Text);
+            dummy1Row.Children.Add(dummy1ColorSelector);
+
+            dummy2Row.Children.Add(dummy2Text);
+            dummy2Row.Children.Add(dummy2ColorSelector);
+
+            colorDummiesStack.Children.Add(dummy1Row); 
+            colorDummiesStack.Children.Add(dummy2Row); 
+
+            mainVerticalStack.Children.Add(mainReplayStack);
+            mainVerticalStack.Children.Add(colorDummiesStack);
 
             lockoutSettingStack.Children.Add(lockoutSettingAlwaysButton);
             lockoutSettingStack.Children.Add(lockoutSettingNeverButton);
@@ -601,9 +673,11 @@ namespace BingoBoardReplay
             BingoBoardReplay.Instance.ReproduceState();
         }
 
-        private static StackLayout CreateDestinationRoomColorSelector()
+        private static StackLayout CreateDummyColorSelector(bool dummy1)
         {
-            StackLayout roomSelectorStack = new(layoutRoot, "BingoBoardReplay DestinationRoomColorRow")
+            int dummy = dummy1 ? 1 : 2;
+            List<Button> buttons = dummy1 ? dummy1ColorButtons : dummy2ColorButtons;
+            StackLayout colorSelectorStack = new(layoutRoot, $"BingoBoardReplay Dummy{dummy}RoomColorRow")
             {
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -611,14 +685,14 @@ namespace BingoBoardReplay
                 Orientation = Orientation.Vertical,
                 Padding = new Padding(0, 10, 0, 0),
             };
-            StackLayout row1 = new(layoutRoot, "BingoBoardReplay DestinationRoomColorRow1")
+            StackLayout row1 = new(layoutRoot, $"BingoBoardReplay Dummy{dummy}ColorRow1")
             {
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 Spacing = 10,
                 Orientation = Orientation.Horizontal,
             };
-            StackLayout row2 = new(layoutRoot, "BingoBoardReplay DestinationRoomColorRow2")
+            StackLayout row2 = new(layoutRoot, $"BingoBoardReplay Dummy{dummy}ColorRow2")
             {
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -628,27 +702,27 @@ namespace BingoBoardReplay
             foreach (Colors color in Enum.GetValues(typeof(Colors)))
             {
                 string name = char.ToUpper(color.GetName()[0]) + color.GetName().Substring(1);
-                Action<Button> onClick = MakeColorButtonOnClick(destinationRoomColorButtons, color);
+                Action<Button> onClick = MakeColorButtonOnClick(dummy1, buttons, color);
                 Button button = CreateColorButton(name, color.GetColor(), onClick);
-                destinationRoomColorButtons.Add(button);
+                buttons.Add(button);
             }
 
-            row1.Children.Add(destinationRoomColorButtons[0]);
-            row1.Children.Add(destinationRoomColorButtons[1]);
-            row1.Children.Add(destinationRoomColorButtons[2]);
-            row1.Children.Add(destinationRoomColorButtons[3]);
-            row1.Children.Add(destinationRoomColorButtons[4]);
+            row1.Children.Add(buttons[0]);
+            row1.Children.Add(buttons[1]);
+            row1.Children.Add(buttons[2]);
+            row1.Children.Add(buttons[3]);
+            row1.Children.Add(buttons[4]);
 
-            row2.Children.Add(destinationRoomColorButtons[5]);
-            row2.Children.Add(destinationRoomColorButtons[6]);
-            row2.Children.Add(destinationRoomColorButtons[7]);
-            row2.Children.Add(destinationRoomColorButtons[8]);
-            row2.Children.Add(destinationRoomColorButtons[9]);
+            row2.Children.Add(buttons[5]);
+            row2.Children.Add(buttons[6]);
+            row2.Children.Add(buttons[7]);
+            row2.Children.Add(buttons[8]);
+            row2.Children.Add(buttons[9]);
 
-            roomSelectorStack.Children.Add(row1);
-            roomSelectorStack.Children.Add(row2);
+            colorSelectorStack.Children.Add(row1);
+            colorSelectorStack.Children.Add(row2);
 
-            return roomSelectorStack;
+            return colorSelectorStack;
         }
 
         private static Button CreateColorButton(string text, Color color, Action<Button> onClick)
@@ -667,7 +741,7 @@ namespace BingoBoardReplay
             return button;
         }
 
-        private static Action<Button> MakeColorButtonOnClick(List<Button> otherButtons, Colors color)
+        private static Action<Button> MakeColorButtonOnClick(bool dummy1, List<Button> otherButtons, Colors color)
         {
             return button =>
             {
@@ -676,7 +750,14 @@ namespace BingoBoardReplay
                     otherButton.BorderColor = otherButton.ContentColor;
                 }
                 button.BorderColor = Color.white;
-                BingoBoardReplay.Instance.Replayer.SetColor(color);
+                if(dummy1)
+                {
+                    BingoBoardReplay.Instance.ColorDummy1.SetColor(color);
+                }
+                else
+                {
+                    BingoBoardReplay.Instance.ColorDummy2.SetColor(color);
+                }
             };
         }
 

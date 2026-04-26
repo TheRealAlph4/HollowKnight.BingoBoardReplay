@@ -15,13 +15,15 @@ namespace BingoBoardReplay
     {
         new public string GetName() => "BingoBoardReplay";
 
-        public static string version = "1.3.4.4";
+        public static string version = "1.3.5.0";
         public override string GetVersion() => version;
 
         public static BingoBoardReplay Instance;
         public GlobalSettings Settings = new();
         internal Session Listener { get; set; }
         internal Session Replayer { get; set; }
+        internal Session ColorDummy1 { get; set; }
+        internal Session ColorDummy2 { get; set; }
 
         private EventHandler<GoalUpdateEventInfo> currentReplayer;
 
@@ -53,6 +55,8 @@ namespace BingoBoardReplay
             {
                 Listener = SessionManager.CreateSession("SourceListener", BingoSync.Clients.Servers.BingoSync, false, false);
                 Replayer = SessionManager.CreateSession("TargetReplayer", BingoSync.Clients.Servers.BingoSync, false, false);
+                ColorDummy1 = SessionManager.CreateSession("ColorDummy1", BingoSync.Clients.Servers.BingoSync, false, false);
+                ColorDummy2 = SessionManager.CreateSession("ColorDummy2", BingoSync.Clients.Servers.BingoSync, false, false);
 
                 Listener.OnNewCardReceived += RevealNewCard;
                 Replayer.OnNewCardReceived += RevealNewCard;
@@ -99,18 +103,16 @@ namespace BingoBoardReplay
                 CurrentReplayId = Guid.NewGuid();
 
                 Listener.JoinRoom(ReplayUI.SourceRoomCode, "ReplayBot", ReplayUI.SourceRoomPassword, (ex) => { });
-                while(Listener.ClientIsConnecting())
-                {
-                    Thread.Sleep(250);
-                }
-
+                ColorDummy1.JoinRoom(ReplayUI.DestinationRoomCode, "_Dummy1", ReplayUI.DestinationRoomPassword, (ex) => { });
+                ColorDummy2.JoinRoom(ReplayUI.DestinationRoomCode, "_Dummy2", ReplayUI.DestinationRoomPassword, (ex) => { });
                 Replayer.JoinRoom(ReplayUI.DestinationRoomCode, "ReplayBot", ReplayUI.DestinationRoomPassword, (ex) => { });
-                while(Replayer.ClientIsConnecting())
+
+                while(Listener.ClientIsConnecting() || ColorDummy1.ClientIsConnecting() || ColorDummy2.ClientIsConnecting() || Replayer.ClientIsConnecting())
                 {
-                    Thread.Sleep(250);
+                    Thread.Sleep(100);
                 }
 
-                if (!Listener.ClientIsConnected() || !Replayer.ClientIsConnected())
+                if (!Listener.ClientIsConnected() || !ColorDummy1.ClientIsConnected() || !ColorDummy2.ClientIsConnected() || !Replayer.ClientIsConnected())
                 {
                     StopReplay();
                     return;
@@ -133,6 +135,8 @@ namespace BingoBoardReplay
             ReplayUI.IsReplaying = false;
             Listener.ExitRoom(() => { });
             Replayer.ExitRoom(() => { });
+            ColorDummy1.ExitRoom(() => { });
+            ColorDummy2.ExitRoom(() => { });
             ReplayUI.BothClientsConnected = false;
             GoalsInProgress = 0;
             Listener.OnGoalUpdateReceived -= currentReplayer;
