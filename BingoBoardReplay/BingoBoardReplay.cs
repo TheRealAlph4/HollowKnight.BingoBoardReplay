@@ -1,11 +1,12 @@
 ﻿using BingoSync;
 using BingoSync.Clients.EventInfoObjects;
-using BingoSync.CustomGoals;
+using BingoSync.Clients.StateChangeInfoObjects;
 using BingoSync.Interfaces;
 using BingoSync.Sessions;
 using Modding;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -15,7 +16,7 @@ namespace BingoBoardReplay
     {
         new public string GetName() => "BingoBoardReplay";
 
-        public static string version = "1.3.5.0";
+        public static string version = "1.4.0.0";
         public override string GetVersion() => version;
 
         public static BingoBoardReplay Instance;
@@ -58,28 +59,24 @@ namespace BingoBoardReplay
                 ColorDummy1 = SessionManager.CreateSession("ColorDummy1", BingoSync.Clients.Servers.BingoSync, false, false);
                 ColorDummy2 = SessionManager.CreateSession("ColorDummy2", BingoSync.Clients.Servers.BingoSync, false, false);
 
-                Listener.OnNewCardReceived += RevealNewCard;
-                Replayer.OnNewCardReceived += RevealNewCard;
-                Replayer.OnNewCardReceived += ReceiveReproducedBoard;
-                Listener.OnRoomSettingsReceived += OnListenerRoomSettingsReceived;
-                Listener.OnRoomSettingsReceived += (sender, settings) => ReplayUI.SourceRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
-                Replayer.OnRoomSettingsReceived += (sender, settings) => ReplayUI.DestinationRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
-                Listener.OnCardRevealedBroadcastReceived += OnListenerRevealed;
+                Listener.OnNewBoardEventReceived += RevealNewBoard;
+                Replayer.OnNewBoardEventReceived += RevealNewBoard;
+                Replayer.OnNewBoardEventReceived += ReceiveReproducedBoard;
+                Listener.OnRoomSettingsChanged += OnListenerRoomSettingsReceived;
+                Listener.OnRoomSettingsChanged += (sender, settings) => ReplayUI.SourceRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
+                Replayer.OnRoomSettingsChanged += (sender, settings) => ReplayUI.DestinationRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
+                Listener.OnBoardRevealed += OnListenerRevealed;
             };
         }
 
-        private void OnListenerRevealed(object sender, CardRevealedEventInfo revealedEventInfo)
+        private void OnListenerRevealed(object sender, EventArgs _)
         {
-            Session session = sender as Session;
-            if(revealedEventInfo.Player.UUID == session.RoomPlayerUUID)
-            {
-                ReplayUI.ListenerHasRevealed = true;
-            }
+            ReplayUI.ListenerHasRevealed = true;
         }
 
         private void OnListenerRoomSettingsReceived(object sender, RoomSettings roomSettings)
         {
-            if(!roomSettings.HideCard)
+            if(!roomSettings.HideBoard)
             {
                 ReplayUI.ListenerHasRevealed = true;
             }
@@ -102,10 +99,10 @@ namespace BingoBoardReplay
             {
                 CurrentReplayId = Guid.NewGuid();
 
-                Listener.JoinRoom(ReplayUI.SourceRoomCode, "ReplayBot", ReplayUI.SourceRoomPassword, (ex) => { });
-                ColorDummy1.JoinRoom(ReplayUI.DestinationRoomCode, "_Dummy1", ReplayUI.DestinationRoomPassword, (ex) => { });
-                ColorDummy2.JoinRoom(ReplayUI.DestinationRoomCode, "_Dummy2", ReplayUI.DestinationRoomPassword, (ex) => { });
-                Replayer.JoinRoom(ReplayUI.DestinationRoomCode, "ReplayBot", ReplayUI.DestinationRoomPassword, (ex) => { });
+                Listener.JoinRoom(ReplayUI.SourceRoomCode, "ReplayBot", ReplayUI.SourceRoomPassword, 0);
+                ColorDummy1.JoinRoom(ReplayUI.DestinationRoomCode, "_Dummy1", ReplayUI.DestinationRoomPassword, 0);
+                ColorDummy2.JoinRoom(ReplayUI.DestinationRoomCode, "_Dummy2", ReplayUI.DestinationRoomPassword, 0);
+                Replayer.JoinRoom(ReplayUI.DestinationRoomCode, "ReplayBot", ReplayUI.DestinationRoomPassword, 0);
 
                 while(Listener.ClientIsConnecting() || ColorDummy1.ClientIsConnecting() || ColorDummy2.ClientIsConnecting() || Replayer.ClientIsConnecting())
                 {
@@ -121,10 +118,10 @@ namespace BingoBoardReplay
                 ReplayUI.BothClientsConnected = true;
 
                 currentReplayer = MakeDelayedMarkReplayer(TimeSpan.FromSeconds(ReplayUI.MainDelay), Replayer, CurrentReplayId);
-                Listener.OnGoalUpdateReceived += currentReplayer;
+                Listener.OnGoalUpdateEventReceived += currentReplayer;
 
-                Listener.RevealCard();
-                Replayer.RevealCard();
+                Listener.RevealBoard();
+                Replayer.RevealBoard();
 
                 callback?.Invoke();
             });
@@ -139,7 +136,7 @@ namespace BingoBoardReplay
             ColorDummy2.ExitRoom(() => { });
             ReplayUI.BothClientsConnected = false;
             GoalsInProgress = 0;
-            Listener.OnGoalUpdateReceived -= currentReplayer;
+            Listener.OnGoalUpdateEventReceived -= currentReplayer;
             CurrentReplayId = Guid.NewGuid();
         }
 
@@ -147,12 +144,8 @@ namespace BingoBoardReplay
         {
             Task.Run(() =>
             {
-                List<Square> backupSquares = Listener.Board.SquaresToDisplay;
-                List<BingoGoal> goals = [];
-                foreach (Square square in backupSquares)
-                {
-                    goals.Add(new BingoGoal(square.Name));
-                }
+                List<BoardSquare> backupSquares = Listener.SquareManager.SquaresToDisplay;
+                List<string> goals = [.. backupSquares.Select(goal => string.Copy(goal.Name))];
 
                 waitingForReproduceBoard = true;
 
@@ -168,25 +161,23 @@ namespace BingoBoardReplay
                 {
                     case GlobalSettings.CloneRoomOption.Always: hide = true; break;
                     case GlobalSettings.CloneRoomOption.Never: hide = false; break;
-                    case GlobalSettings.CloneRoomOption.Copy: hide = Listener.RoomHidCardInitially; break;
+                    case GlobalSettings.CloneRoomOption.Copy: hide = Listener.RoomHidBoardInitially; break;
                 }
 
-                Replayer.NewCard(goals, lockout, hide);
+                Replayer.NewBoard(goals, lockout, hide);
                 while (waitingForReproduceBoard)
                 {
                     Thread.Sleep(250);
                 }
 
-                foreach(Square square in backupSquares)
+                foreach(BoardSquare square in backupSquares)
                 {
                     int i = square.GoalIndex;
-                    foreach (BingoSync.Colors color in square.MarkedBy)
+                    foreach (int color in square.MarkedBy)
                     {
-                        if(color != BingoSync.Colors.Blank)
+                        if(color != -1)
                         {
-                            Replayer.SelectIndex(i, color, () => {
-                                Log("Couldn't mark a goal");
-                            });
+                            Replayer.SelectIndex(i, color);
                         }
                     }
                 }
@@ -194,7 +185,7 @@ namespace BingoBoardReplay
 
         }
 
-        private void RevealNewCard(object sender, NewCardEventInfo info)
+        private void RevealNewBoard(object sender, NewBoardEventInfo info)
         {
             Session session = sender as Session;
             if (session == Listener)
@@ -204,11 +195,11 @@ namespace BingoBoardReplay
             Task.Run(() =>
             {
                 Thread.Sleep(1000);
-                session.RevealCard();
+                session.RevealBoard();
             });
         }
 
-        private void ReceiveReproducedBoard(object sender, NewCardEventInfo info)
+        private void ReceiveReproducedBoard(object sender, NewBoardEventInfo info)
         {
             waitingForReproduceBoard = false;
         }
@@ -228,7 +219,7 @@ namespace BingoBoardReplay
                         if (markReplayId == CurrentReplayId)
                         {
                             --GoalsInProgress;
-                            replayer.SelectIndex(goalUpdate.Index, goalUpdate.Color, () => Log($"Could not mark slot {goalUpdate.Index + 1}."), goalUpdate.Unmarking);
+                            replayer.SelectIndex(goalUpdate.Index, goalUpdate.Color, goalUpdate.Unmark);
                         }
                     });
                 });
@@ -243,13 +234,13 @@ namespace BingoBoardReplay
                 int replayBotReveal = infoList.Count - 1;
                 for (int i = 0; i < infoList.Count; ++i)
                 {
-                    if (infoList[i] is NewCardEventInfo)
+                    if (infoList[i] is NewBoardEventInfo)
                     {
                         lastNewCard = i;
                     }
-                    if (infoList[i] is CardRevealedEventInfo)
+                    if (infoList[i] is BoardRevealedEventInfo)
                     {
-                        CardRevealedEventInfo reveal = infoList[i] as CardRevealedEventInfo;
+                        BoardRevealedEventInfo reveal = infoList[i] as BoardRevealedEventInfo;
                         if (reveal.Player.UUID == Instance.Listener.RoomPlayerUUID)
                         {
                             replayBotReveal = i;
@@ -260,7 +251,7 @@ namespace BingoBoardReplay
                 DateTimeOffset end = ParseTimestampString(infoList[replayBotReveal].Timestamp);
                 return new Tuple<DateTimeOffset, DateTimeOffset>(start, end);
             }
-            static int parseStateUntilCutoff(List<GoalUpdateEventInfo> goalUpdates, List<HashSet<Colors>> stateAtReplayCutoff)
+            static int parseStateUntilCutoff(List<GoalUpdateEventInfo> goalUpdates, List<HashSet<int>> stateAtReplayCutoff)
             {
                 DateTimeOffset cutoff = DateTimeOffset.UtcNow - TimeSpan.FromSeconds(ReplayUI.MainDelay + ReplayUI.SecondaryDelay);
                 for (int j = 0; j < 25; ++j)
@@ -276,7 +267,7 @@ namespace BingoBoardReplay
                         break;
                     }
                     GoalUpdateEventInfo goalUpdate = goalUpdates[i];
-                    if (goalUpdate.Unmarking)
+                    if (goalUpdate.Unmark)
                     {
                         stateAtReplayCutoff[goalUpdate.Index].Remove(goalUpdate.Color);
                     }
@@ -287,24 +278,24 @@ namespace BingoBoardReplay
                 }
                 return i;
             }
-            void replicatePreCutoff(List<HashSet<Colors>> stateAtReplayCutoff, bool unmark = false)
+            void replicatePreCutoff(List<HashSet<int>> stateAtReplayCutoff, bool unmark = false)
             {
                 for(int i = 0; i < 25; ++i)
                 {
-                    foreach (Colors color in stateAtReplayCutoff[i])
+                    foreach (int color in stateAtReplayCutoff[i])
                     {
-                        if (!Replayer.Board.SquaresToDisplay[i].MarkedBy.Contains(color))
+                        if (!Replayer.SquareManager.SquaresToDisplay[i].MarkedBy.Contains(color))
                         {
-                            Replayer.SelectIndex(i, color, () => { });
+                            Replayer.SelectIndex(i, color);
                         }
                     }
                     if (unmark)
                     {
-                        foreach (Colors color in Replayer.Board.SquaresToDisplay[i].MarkedBy)
+                        foreach (int color in Replayer.SquareManager.SquaresToDisplay[i].MarkedBy)
                         {
                             if (!stateAtReplayCutoff[i].Contains(color))
                             {
-                                Replayer.SelectIndex(i, color, () => { }, true);
+                                Replayer.SelectIndex(i, color, true);
                             }
                         }
                     }
@@ -357,12 +348,12 @@ namespace BingoBoardReplay
                             }
                         }
                     }
-                    List<HashSet<Colors>> stateAtReplayCutoff = [];
+                    List<HashSet<int>> stateAtReplayCutoff = [];
                     int cutoffIndex = parseStateUntilCutoff(goalUpdates, stateAtReplayCutoff);
                     replicatePreCutoff(stateAtReplayCutoff, false);
                     int mainDelayCutoff = restartSecondaryDelays(goalUpdates, cutoffIndex);
                     restartMainDelays(goalUpdates, mainDelayCutoff);
-                }, () => { });
+                });
             });
         }
 
@@ -375,7 +366,7 @@ namespace BingoBoardReplay
                 if (markReplayId == CurrentReplayId)
                 {
                     --GoalsInProgress;
-                    replayer.SelectIndex(goalUpdate.Index, goalUpdate.Color, () => Log($"Could not mark slot {goalUpdate.Index + 1}."), goalUpdate.Unmarking);
+                    replayer.SelectIndex(goalUpdate.Index, goalUpdate.Color, goalUpdate.Unmark);
                 }
             });
         }

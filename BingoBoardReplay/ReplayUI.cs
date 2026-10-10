@@ -1,4 +1,5 @@
 ﻿using BingoSync;
+using BingoSync.Clients.ColorManagement;
 using BingoSync.Sessions;
 using MagicUI.Core;
 using MagicUI.Elements;
@@ -29,6 +30,8 @@ namespace BingoBoardReplay
 
         private readonly static Color GLOBAL_SETTINGS_INACTIVE_COLOR = Color.white;
         private readonly static Color GLOBAL_SETTINGS_ACTIVE_COLOR = Color.red;
+
+        private readonly static IColorManager ColorManager = new BingoSyncColorManager();
 
         private readonly static LayoutRoot layoutRoot;
         private readonly static StackLayout mainVerticalStack;
@@ -85,7 +88,9 @@ namespace BingoBoardReplay
         private readonly static Button hideCardSettingAlwaysButton;
         private readonly static Button hideCardSettingNeverButton;
         private readonly static Button hideCardSettingCopyButton;
-        
+
+        private readonly static List<Action> ButtonColorUpdaters = [];
+
         private static Action<string> Log;
 
         public static bool IsVisible { get; set; } = false;
@@ -217,6 +222,7 @@ namespace BingoBoardReplay
 
         static ReplayUI()
         {
+            ColorManager.OnColorSchemeChanged += ColorSchemeChangedHandler;
             layoutRoot = new LayoutRoot(true, "BingoBoardReplay LayoutRoot")
             {
                 VisibilityCondition = () => IsVisible
@@ -699,12 +705,24 @@ namespace BingoBoardReplay
                 Spacing = 10,
                 Orientation = Orientation.Horizontal,
             };
-            foreach (Colors color in Enum.GetValues(typeof(Colors)))
+
+            static string Capitalize(string str) { return str[0].ToString().ToUpper() + str.Substring(1); }
+
+            foreach (int color in ColorManager.Colors)
             {
-                string name = char.ToUpper(color.GetName()[0]) + color.GetName().Substring(1);
+                string name = Capitalize(ColorManager.NameOf(color));
                 Action<Button> onClick = MakeColorButtonOnClick(dummy1, buttons, color);
-                Button button = CreateColorButton(name, color.GetColor(), onClick);
+                Button button = CreateColorButton(name, ColorManager.ColorOf(color), onClick);
                 buttons.Add(button);
+                ButtonColorUpdaters.Add(() =>
+                {
+                    button.ContentColor = ColorManager.ColorOf(color);
+                    Session session = dummy1 ? BingoBoardReplay.Instance.ColorDummy1 : BingoBoardReplay.Instance.ColorDummy2;
+                    if (color != session.RoomColor)
+                    {
+                        button.BorderColor = button.ContentColor;
+                    }
+                });
             }
 
             row1.Children.Add(buttons[0]);
@@ -725,6 +743,14 @@ namespace BingoBoardReplay
             return colorSelectorStack;
         }
 
+        private static void ColorSchemeChangedHandler(object sender, EventArgs e)
+        {
+            foreach (Action colorUpdater in ButtonColorUpdaters)
+            {
+                colorUpdater();
+            }
+        }
+
         private static Button CreateColorButton(string text, Color color, Action<Button> onClick)
         {
             Button button = new(layoutRoot, text.ToLower())
@@ -741,7 +767,7 @@ namespace BingoBoardReplay
             return button;
         }
 
-        private static Action<Button> MakeColorButtonOnClick(bool dummy1, List<Button> otherButtons, Colors color)
+        private static Action<Button> MakeColorButtonOnClick(bool dummy1, List<Button> otherButtons, int color)
         {
             return button =>
             {
