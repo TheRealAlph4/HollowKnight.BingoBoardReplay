@@ -16,7 +16,7 @@ namespace BingoBoardReplay
     {
         new public string GetName() => "BingoBoardReplay";
 
-        public static string version = "1.4.0.0";
+        public static string version = "1.4.0.1";
         public override string GetVersion() => version;
 
         public static BingoBoardReplay Instance;
@@ -52,21 +52,24 @@ namespace BingoBoardReplay
             Log("Initializing");
             ReplayUI.SetLogger(Log);
 
-            OrderedLoader.OnCompletelyLoaded += delegate
-            {
-                Listener = SessionManager.CreateSession("SourceListener", BingoSync.Clients.Servers.BingoSync, false, false);
-                Replayer = SessionManager.CreateSession("TargetReplayer", BingoSync.Clients.Servers.BingoSync, false, false);
-                ColorDummy1 = SessionManager.CreateSession("ColorDummy1", BingoSync.Clients.Servers.BingoSync, false, false);
-                ColorDummy2 = SessionManager.CreateSession("ColorDummy2", BingoSync.Clients.Servers.BingoSync, false, false);
+            OrderedLoader.OnCompletelyLoaded += LoadSessions;
+        }
 
-                Listener.OnNewBoardEventReceived += RevealNewBoard;
-                Replayer.OnNewBoardEventReceived += RevealNewBoard;
-                Replayer.OnNewBoardEventReceived += ReceiveReproducedBoard;
-                Listener.OnRoomSettingsChanged += OnListenerRoomSettingsReceived;
-                Listener.OnRoomSettingsChanged += (sender, settings) => ReplayUI.SourceRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
-                Replayer.OnRoomSettingsChanged += (sender, settings) => ReplayUI.DestinationRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
-                Listener.OnBoardRevealed += OnListenerRevealed;
-            };
+        private void LoadSessions(object sender, EventArgs e)
+        {
+            Log("BingoBoardReplay.LoadSessions");
+            Listener = SessionManager.CreateSession("SourceListener", BingoSync.Clients.Servers.BingoSync, false, false);
+            Replayer = SessionManager.CreateSession("TargetReplayer", BingoSync.Clients.Servers.BingoSync, false, false);
+            ColorDummy1 = SessionManager.CreateSession("ColorDummy1", BingoSync.Clients.Servers.BingoSync, false, false);
+            ColorDummy2 = SessionManager.CreateSession("ColorDummy2", BingoSync.Clients.Servers.BingoSync, false, false);
+
+            Listener.OnNewBoardEventReceived += RevealNewBoard;
+            Replayer.OnNewBoardEventReceived += RevealNewBoard;
+            Replayer.OnNewBoardEventReceived += ReceiveReproducedBoard;
+            Listener.OnRoomSettingsChanged += OnListenerRoomSettingsReceived;
+            Listener.OnRoomSettingsChanged += (sender, settings) => ReplayUI.SourceRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
+            Replayer.OnRoomSettingsChanged += (sender, settings) => ReplayUI.DestinationRoomTextSuffix = settings.IsLockout ? " (Lockout)" : " (Non-Lockout)";
+            Listener.OnBoardRevealed += OnListenerRevealed;
         }
 
         private void OnListenerRevealed(object sender, EventArgs _)
